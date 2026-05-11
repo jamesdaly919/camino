@@ -5,7 +5,7 @@
    - OSM map tiles: stale-while-revalidate (so previously seen tiles work offline)
    - Overpass API: network-only (always fresh)
 */
-const VERSION = 'camino-v1.3.0';
+const VERSION = 'camino-v1.3.1';
 const SHELL_CACHE = `${VERSION}-shell`;
 const TILES_CACHE = `${VERSION}-tiles`;
 const STATIC_CACHE = `${VERSION}-static`;

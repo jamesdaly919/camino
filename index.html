@@ -1218,27 +1218,31 @@ function updateProgress(){
     }
   }
   const stage = STAGES[state.currentStage - 1];
-  const proj = onRoute && bestStage === state.currentStage
-    ? bestProj
-    : projectOnRoute(state.pos, stage.waypoints);
 
-  const totalKm = stage.km;
-  const doneKm  = (proj.distAlong / 1000);
-  const remainKm = Math.max(0, totalKm - doneKm);
-  const pct = Math.max(0, Math.min(100, (doneKm / totalKm) * 100));
+  if (onRoute){
+    const proj = bestStage === state.currentStage ? bestProj : projectOnRoute(state.pos, stage.waypoints);
+    const totalKm = stage.km;
+    const doneKm  = (proj.distAlong / 1000);
+    const remainKm = Math.max(0, totalKm - doneKm);
+    const pct = Math.max(0, Math.min(100, (doneKm / totalKm) * 100));
 
-  document.getElementById('stagePillTxt').textContent = `Stage ${stage.id} · ${stage.from} → ${stage.to}`;
-  document.getElementById('stageBarFill').style.width = pct.toFixed(1) + '%';
-  document.getElementById('stageDone').textContent   = `${doneKm.toFixed(1)} km walked`;
-  document.getElementById('stagePct').textContent    = `${pct.toFixed(0)}%`;
-  document.getElementById('stageRemain').textContent = `${remainKm.toFixed(1)} km to go`;
-
-  setStatus(
-    onRoute ? `On route · ${stage.to}` : 'Off route',
-    onRoute
-      ? `${pct.toFixed(0)}% through · ${remainKm.toFixed(1)} km to ${stage.to}`
-      : `${(bestDist/1000).toFixed(2)} km from the closest Camino path.`
-  );
+    document.getElementById('stagePillTxt').textContent = `Stage ${stage.id} · ${stage.from} → ${stage.to}`;
+    document.getElementById('stageBarFill').style.width = pct.toFixed(1) + '%';
+    document.getElementById('stageDone').textContent   = `${doneKm.toFixed(1)} km walked`;
+    document.getElementById('stagePct').textContent    = `${pct.toFixed(0)}%`;
+    document.getElementById('stageRemain').textContent = `${remainKm.toFixed(1)} km to go`;
+    setStatus(`On route · ${stage.to}`, `${pct.toFixed(0)}% through · ${remainKm.toFixed(1)} km to ${stage.to}`);
+  } else {
+    // Off route — show planned next stage but no fake progress
+    const distKm = bestDist / 1000;
+    const distLabel = distKm >= 100 ? `${distKm.toFixed(0)} km` : `${distKm.toFixed(2)} km`;
+    document.getElementById('stagePillTxt').textContent = `Stage ${stage.id} · ${stage.from} → ${stage.to}`;
+    document.getElementById('stageBarFill').style.width = '0%';
+    document.getElementById('stageDone').textContent   = 'Not started';
+    document.getElementById('stagePct').textContent    = '—';
+    document.getElementById('stageRemain').textContent = `${distLabel} from route`;
+    setStatus('Off route', `You are ${distLabel} from the closest Camino path. Progress will start when you reach Vigo.`);
+  }
   document.getElementById('mapStatus').classList.toggle('live', onRoute);
 }
 
