@@ -1,0 +1,2262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1,user-scalable=no" />
+<title>Camino Companion · Vigo to Santiago</title>
+<meta name="description" content="Pilgrim companion for the Portuguese Coastal Camino: live GPS, stages, nearby services, dual time." />
+<meta name="theme-color" content="#1A1F2E" media="(prefers-color-scheme: dark)" />
+<meta name="theme-color" content="#F4ECD8" media="(prefers-color-scheme: light)" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Camino" />
+<link rel="manifest" href="manifest.webmanifest" />
+<link rel="icon" type="image/svg+xml" href="icon.svg" />
+<link rel="apple-touch-icon" href="icon-192.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,800&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+
+<style>
+:root{
+  --bg:#F4ECD8;          /* parchment */
+  --bg-2:#EADFC2;
+  --ink:#0F1929;         /* deep navy */
+  --ink-2:#3D4A5F;
+  --line:#D9CDB0;
+  --camino:#FFC72C;      /* arrow yellow */
+  --camino-deep:#E0A800;
+  --terra:#C84B31;       /* terracotta accent */
+  --moss:#5C7148;
+  --shadow:0 1px 0 rgba(15,25,41,.06), 0 2px 8px rgba(15,25,41,.06);
+  --r:14px;
+  --safe-bottom:env(safe-area-inset-bottom,0px);
+  --safe-top:env(safe-area-inset-top,0px);
+  --nav-h:64px;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#1A1F2E;
+    --bg-2:#232A3D;
+    --ink:#E8DDC0;
+    --ink-2:#A8AFC0;
+    --line:#2F3852;
+    --shadow:0 1px 0 rgba(0,0,0,.3), 0 4px 16px rgba(0,0,0,.4);
+  }
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0;height:100%;background:var(--bg);color:var(--ink);font-family:'Manrope',system-ui,sans-serif;overscroll-behavior:none}
+body{display:flex;flex-direction:column;height:100dvh}
+button{font:inherit;color:inherit;cursor:pointer;border:0;background:none}
+h1,h2,h3,h4{font-family:'Fraunces',Georgia,serif;font-weight:600;letter-spacing:-0.01em;margin:0}
+
+/* ===== Header ===== */
+.app-head{
+  position:relative;
+  padding:calc(var(--safe-top) + 10px) 14px 10px;
+  background:var(--bg);
+  border-bottom:1px solid var(--line);
+  z-index:10;
+}
+.app-head .row{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.brand{display:flex;align-items:center;gap:8px;font-family:'Fraunces',serif;font-weight:700;font-size:18px;letter-spacing:-0.02em}
+.brand .shell{width:22px;height:22px;display:inline-block}
+.stage-pill{
+  display:inline-flex;align-items:center;gap:6px;
+  background:var(--camino);color:#1A1209;
+  padding:5px 10px;border-radius:999px;font-weight:700;font-size:12px;
+  letter-spacing:0.02em;text-transform:uppercase;
+}
+.stage-pill .dot{width:6px;height:6px;border-radius:50%;background:#1A1209}
+.stage-bar{margin-top:8px;height:4px;background:var(--line);border-radius:2px;overflow:hidden}
+.stage-bar > span{display:block;height:100%;background:linear-gradient(90deg,var(--camino-deep),var(--camino));border-radius:2px;transition:width .8s ease}
+.stage-meta{display:flex;justify-content:space-between;font-size:12px;color:var(--ink-2);margin-top:6px;font-variant-numeric:tabular-nums}
+
+/* ===== Main views ===== */
+main{flex:1;overflow:hidden;position:relative;background:var(--bg)}
+.view{position:absolute;inset:0;overflow:auto;-webkit-overflow-scrolling:touch;padding:0;display:none}
+.view.active{display:block}
+.view.scroll{padding:14px 14px calc(var(--nav-h) + var(--safe-bottom) + 14px)}
+.view-map{padding:0}
+
+/* ===== Map ===== */
+#map{position:absolute;inset:0;width:100%;height:100%}
+.map-controls{
+  position:absolute;right:12px;top:12px;display:flex;flex-direction:column;gap:8px;z-index:500;
+}
+.map-btn{
+  width:46px;height:46px;border-radius:12px;background:var(--bg);
+  display:grid;place-items:center;box-shadow:var(--shadow);
+  border:1px solid var(--line);
+}
+.map-btn:active{transform:scale(0.94)}
+.map-btn svg{width:22px;height:22px;stroke:var(--ink);fill:none;stroke-width:2}
+
+.map-status{
+  position:absolute;left:12px;bottom:calc(var(--nav-h) + var(--safe-bottom) + 12px);
+  right:12px;background:var(--bg);border:1px solid var(--line);border-radius:var(--r);
+  padding:10px 12px;box-shadow:var(--shadow);z-index:500;
+  display:flex;align-items:center;gap:10px;
+}
+.map-status .gps{width:8px;height:8px;border-radius:50%;background:#888;flex:none}
+.map-status.live .gps{background:var(--moss);box-shadow:0 0 0 0 rgba(92,113,72,.6);animation:pulse 2s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(92,113,72,.5)}70%{box-shadow:0 0 0 10px rgba(92,113,72,0)}100%{box-shadow:0 0 0 0 rgba(92,113,72,0)}}
+.map-status .txt{font-size:13px;line-height:1.3;flex:1;min-width:0}
+.map-status .txt b{display:block;font-family:'Fraunces',serif;font-weight:600;font-size:14px}
+.map-status .txt span{color:var(--ink-2);font-variant-numeric:tabular-nums}
+
+/* ===== Leaflet overrides ===== */
+.leaflet-control-zoom{display:none}
+.leaflet-control-attribution{font-size:10px !important;background:rgba(244,236,216,.85) !important}
+@media (prefers-color-scheme: dark){
+  .leaflet-control-attribution{background:rgba(26,31,46,.85) !important;color:var(--ink-2) !important}
+  .leaflet-control-attribution a{color:var(--ink) !important}
+}
+.leaflet-tile{filter:saturate(0.9) contrast(1.05)}
+@media (prefers-color-scheme: dark){
+  .leaflet-tile{filter:invert(0.92) hue-rotate(180deg) saturate(0.7) brightness(0.95) contrast(1.1)}
+}
+.pilgrim-marker{
+  width:24px;height:24px;border-radius:50%;
+  background:var(--camino);border:3px solid var(--ink);
+  box-shadow:0 0 0 4px rgba(255,199,44,.3);
+}
+.town-marker{
+  width:14px;height:14px;border-radius:50%;
+  background:var(--bg);border:3px solid var(--terra);
+}
+.town-marker.passed{background:var(--moss);border-color:var(--moss)}
+.town-marker.current{background:var(--camino);border-color:var(--ink);width:16px;height:16px}
+
+/* ===== Cards & lists ===== */
+.card{
+  background:var(--bg);border:1px solid var(--line);border-radius:var(--r);
+  padding:14px;box-shadow:var(--shadow);margin-bottom:12px;
+}
+.card h3{font-size:18px;margin-bottom:6px}
+.card .muted{color:var(--ink-2);font-size:13px}
+.section-title{
+  font-family:'Fraunces',serif;font-size:13px;font-weight:600;text-transform:uppercase;
+  letter-spacing:0.12em;color:var(--ink-2);margin:18px 0 10px 2px;
+}
+.section-title:first-child{margin-top:6px}
+
+/* ===== Stages list ===== */
+.stage-card{
+  background:var(--bg);border:1px solid var(--line);border-radius:var(--r);
+  padding:14px;margin-bottom:10px;display:flex;align-items:flex-start;gap:12px;
+  position:relative;overflow:hidden;
+}
+.stage-card.current{border-color:var(--camino);box-shadow:0 0 0 3px rgba(255,199,44,.15)}
+.stage-card.done{opacity:0.65}
+.stage-card .num{
+  width:32px;height:32px;border-radius:50%;flex:none;
+  display:grid;place-items:center;font-family:'Fraunces',serif;font-weight:700;font-size:14px;
+  background:var(--bg-2);color:var(--ink);
+}
+.stage-card.done .num{background:var(--moss);color:var(--bg)}
+.stage-card.current .num{background:var(--camino);color:var(--ink)}
+.stage-card .body{flex:1;min-width:0}
+.stage-card .body .title{font-family:'Fraunces',serif;font-weight:600;font-size:16px;line-height:1.2}
+.stage-card .body .sub{color:var(--ink-2);font-size:12.5px;margin-top:3px;font-variant-numeric:tabular-nums}
+.stage-card .body .hotel{margin-top:8px;font-size:13px;display:flex;align-items:center;gap:6px}
+.stage-card .body .hotel.empty{color:var(--ink-2);font-style:italic}
+.stage-card .km{font-family:'Fraunces',serif;font-weight:700;font-size:18px;text-align:right;font-variant-numeric:tabular-nums}
+.stage-card .km small{font-size:11px;font-weight:500;color:var(--ink-2);display:block;text-transform:uppercase;letter-spacing:0.08em}
+.stage-counts{display:flex;gap:10px;margin-top:8px;font-size:12px;color:var(--ink-2);font-variant-numeric:tabular-nums}
+.stage-counts span{display:inline-flex;align-items:center;gap:3px}
+
+/* ===== Leg cards (flight / transit / city / layover) ===== */
+.leg-card{
+  display:flex;gap:12px;padding:14px;border-radius:var(--r);
+  border:1px solid var(--line);background:var(--bg);
+  margin-bottom:10px;box-shadow:var(--shadow);
+}
+.leg-card.flight{background:linear-gradient(135deg,var(--bg) 55%,rgba(60,140,170,0.10))}
+.leg-card.transit{background:linear-gradient(135deg,var(--bg) 55%,rgba(92,113,72,0.10))}
+.leg-card.city{background:linear-gradient(135deg,var(--bg) 55%,rgba(255,199,44,0.12))}
+.leg-card.layover{background:var(--bg-2);opacity:0.82}
+.leg-icon{font-size:24px;line-height:1;flex:none}
+.leg-body{flex:1;min-width:0}
+.leg-route{font-family:'Fraunces',serif;font-weight:600;font-size:15px;line-height:1.2}
+.leg-meta{font-size:12px;color:var(--ink-2);margin-top:4px;font-variant-numeric:tabular-nums}
+.leg-note{font-size:13px;color:var(--ink-2);margin-top:6px;line-height:1.5}
+.leg-options{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.leg-options a{
+  font-size:12px;font-weight:600;color:var(--ink);text-decoration:none;
+  background:var(--bg-2);padding:6px 10px;border-radius:8px;
+  border:1px solid var(--line);
+}
+.leg-options a:active{transform:scale(0.97)}
+.leg-highlights{margin:8px 0 0;padding-left:20px;font-size:13px;line-height:1.6;color:var(--ink-2)}
+.leg-highlights li{margin:0}
+
+/* ===== Edited / added item indicators ===== */
+.leg-card, .stage-card{position:relative}
+.leg-card.edited::before, .stage-card.edited::before{
+  content:'';position:absolute;left:0;top:0;bottom:0;width:4px;
+  background:var(--camino);border-radius:var(--r) 0 0 var(--r);
+}
+.leg-card.added{
+  border:2px dashed var(--terra);background:var(--bg);
+}
+.leg-card.added::before{
+  content:'';position:absolute;left:0;top:0;bottom:0;width:4px;
+  background:var(--terra);
+}
+.edit-badge{
+  display:inline-flex;align-items:center;gap:3px;
+  font-size:10px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;
+  padding:2px 7px;border-radius:999px;margin-left:6px;vertical-align:middle;
+  background:var(--camino);color:var(--ink);
+}
+.edit-badge.added{background:var(--terra);color:#fff}
+.leg-actions-row{display:flex;align-items:center;gap:8px;margin-top:8px}
+.leg-actions-row .btn-edit{
+  font-size:11px;font-weight:600;padding:5px 10px;border-radius:8px;
+  background:var(--bg-2);color:var(--ink-2);border:1px solid var(--line);
+  display:inline-flex;align-items:center;gap:4px;cursor:pointer;
+}
+.leg-actions-row .btn-edit:active{transform:scale(0.96)}
+.leg-actions-row .btn-edit.delete{color:var(--terra);border-color:rgba(200,75,49,0.25)}
+.leg-user-notes{
+  margin-top:10px;padding:8px 10px;background:rgba(255,199,44,0.15);border-radius:8px;
+  border-left:3px solid var(--camino-deep);font-size:13px;line-height:1.45;
+}
+.leg-user-notes b{display:block;font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--ink-2);margin-bottom:3px}
+
+/* "+ Add stop" button */
+.add-stop-btn{
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  width:100%;padding:14px;margin-top:8px;
+  background:transparent;border:2px dashed var(--line);border-radius:var(--r);
+  color:var(--ink-2);font-weight:600;font-size:14px;cursor:pointer;
+}
+.add-stop-btn:hover, .add-stop-btn:active{
+  border-color:var(--terra);color:var(--terra);background:rgba(200,75,49,0.04);
+}
+
+/* Type picker in add modal */
+.type-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:8px 0 14px}
+.type-grid button{
+  display:flex;flex-direction:column;align-items:center;gap:4px;
+  padding:14px 8px;border-radius:var(--r);
+  background:var(--bg-2);border:1px solid var(--line);
+  font-size:12px;font-weight:600;cursor:pointer;
+}
+.type-grid button:hover{border-color:var(--camino-deep)}
+.type-grid button .ti{font-size:22px;line-height:1}
+
+/* ===== Weather strip ===== */
+.weather-strip{
+  position:absolute;
+  top:calc(var(--safe-top) + 12px);
+  left:50%;transform:translateX(-50%);
+  z-index:480;pointer-events:none;
+}
+.weather-strip .wbox{
+  pointer-events:auto;background:var(--bg);border:1px solid var(--line);border-radius:12px;
+  box-shadow:var(--shadow);padding:6px 12px;font-size:12px;
+  display:flex;align-items:center;gap:10px;white-space:nowrap;
+}
+.weather-strip .wbox .wcol{display:flex;align-items:center;gap:5px}
+.weather-strip .wbox .wcol .wico{font-size:18px;line-height:1}
+.weather-strip .wbox .wcol b{font-weight:700;font-variant-numeric:tabular-nums;font-size:13px}
+.weather-strip .wbox .wsep{width:1px;height:18px;background:var(--line)}
+.weather-strip .wbox .wlbl{font-size:10px;color:var(--ink-2);text-transform:uppercase;letter-spacing:0.06em}
+.weather-strip .wbox.loading{opacity:0.6}
+
+/* ===== Map panel (feature toggles) ===== */
+.map-panel{
+  position:absolute;left:12px;top:12px;z-index:500;
+  background:var(--bg);border:1px solid var(--line);border-radius:var(--r);
+  box-shadow:var(--shadow);max-width:calc(100vw - 90px);
+  overflow:hidden;
+}
+.map-panel .head{
+  display:flex;align-items:center;gap:8px;padding:10px 12px;cursor:pointer;
+  font-size:12px;font-weight:600;color:var(--ink);
+}
+.map-panel .head .chev{margin-left:auto;transition:transform .2s}
+.map-panel.open .head .chev{transform:rotate(180deg)}
+.map-panel .body{display:none;padding:0 12px 12px;border-top:1px solid var(--line);max-height:60vh;overflow:auto}
+.map-panel.open .body{display:block}
+.map-panel .toggle-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;gap:8px;font-size:13px}
+.map-panel .toggle-row .sm-toggle{width:36px;height:20px;background:var(--line);border-radius:999px;position:relative;flex:none;transition:background .2s}
+.map-panel .toggle-row .sm-toggle::after{content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;background:#fff;border-radius:50%;transition:left .2s;box-shadow:0 1px 2px rgba(0,0,0,0.2)}
+.map-panel .toggle-row .sm-toggle.on{background:var(--camino-deep)}
+.map-panel .toggle-row .sm-toggle.on::after{left:18px}
+.map-panel .filter-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-top:6px}
+.map-panel .chip-filter{
+  display:inline-flex;align-items:center;gap:6px;padding:6px 8px;border-radius:8px;
+  background:var(--bg-2);border:1px solid transparent;font-size:12px;cursor:pointer;
+}
+.map-panel .chip-filter.on{background:var(--camino);color:var(--ink);border-color:var(--camino-deep)}
+.map-panel .chip-filter .dot{width:8px;height:8px;border-radius:50%}
+.map-panel .section-sub{font-size:11px;color:var(--ink-2);text-transform:uppercase;letter-spacing:0.08em;margin:10px 0 4px}
+
+/* ===== Nearby buttons ===== */
+.near-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.near-btn{
+  background:var(--bg);border:1px solid var(--line);border-radius:var(--r);
+  padding:16px 12px;text-align:left;display:flex;flex-direction:column;gap:8px;
+  min-height:88px;box-shadow:var(--shadow);transition:transform .1s;
+}
+.near-btn:active{transform:scale(0.97)}
+.near-btn .icn{
+  width:36px;height:36px;border-radius:10px;display:grid;place-items:center;
+  background:var(--bg-2);
+}
+.near-btn .icn svg{width:20px;height:20px;stroke:var(--ink);fill:none;stroke-width:2}
+.near-btn .lbl{font-weight:600;font-size:14px;line-height:1.2}
+.near-btn .sub{font-size:11.5px;color:var(--ink-2)}
+.near-btn[data-cat="toilets"] .icn{background:rgba(92,113,72,.18)}
+.near-btn[data-cat="lodging"] .icn{background:rgba(255,199,44,.25)}
+.near-btn[data-cat="food"] .icn{background:rgba(200,75,49,.18)}
+.near-btn[data-cat="transit"] .icn{background:rgba(60,90,140,.2)}
+.near-btn[data-cat="pharmacy"] .icn{background:rgba(200,75,49,.22)}
+.near-btn[data-cat="water"] .icn{background:rgba(60,140,170,.2)}
+.near-btn[data-cat="church"] .icn{background:rgba(140,100,50,.2)}
+
+/* ===== Results sheet ===== */
+.sheet{
+  position:fixed;left:0;right:0;bottom:0;top:auto;
+  background:var(--bg);border-top:1px solid var(--line);
+  border-radius:18px 18px 0 0;
+  max-height:75vh;overflow:auto;z-index:1000;
+  transform:translateY(100%);transition:transform .25s cubic-bezier(.2,.8,.2,1);
+  padding:14px 14px calc(var(--safe-bottom) + 20px);
+  box-shadow:0 -4px 24px rgba(0,0,0,.15);
+}
+.sheet.open{transform:translateY(0)}
+.sheet .grab{width:40px;height:4px;background:var(--line);border-radius:2px;margin:0 auto 12px}
+.sheet h2{font-size:20px;margin-bottom:4px;display:flex;align-items:center;justify-content:space-between}
+.sheet h2 button{font-size:13px;color:var(--ink-2);font-family:'Manrope',sans-serif;font-weight:600}
+.sheet .muted{color:var(--ink-2);font-size:13px;margin-bottom:12px}
+.poi-row{
+  display:flex;align-items:flex-start;gap:10px;padding:12px 4px;
+  border-bottom:1px solid var(--line);text-align:left;width:100%;
+}
+.poi-row:last-child{border-bottom:0}
+.poi-row .dist{
+  font-family:'Fraunces',serif;font-weight:700;font-size:14px;
+  min-width:52px;text-align:right;color:var(--terra);font-variant-numeric:tabular-nums;
+}
+.poi-section-head{
+  font-family:'Fraunces',serif;font-size:13px;font-weight:600;text-transform:uppercase;
+  letter-spacing:0.1em;color:var(--ink-2);padding:12px 4px 6px;
+}
+.poi-section:first-child .poi-section-head{padding-top:4px}
+.poi-badge{
+  display:inline-block;font-size:10px;padding:1px 6px;border-radius:999px;
+  background:var(--bg-2);color:var(--ink-2);margin-left:4px;letter-spacing:0.04em;
+  font-weight:600;vertical-align:middle;
+}
+.poi-row .info{flex:1;min-width:0}
+.poi-row .info .nm{font-weight:600;font-size:14.5px;line-height:1.25}
+.poi-row .info .meta{font-size:11.5px;color:var(--ink-2);margin-top:2px}
+.poi-row .go{
+  background:var(--ink);color:var(--bg);
+  padding:6px 10px;border-radius:8px;font-size:12px;font-weight:600;flex:none;
+}
+
+/* ===== Time ===== */
+.time-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.clock-card{
+  background:var(--bg);border:1px solid var(--line);border-radius:var(--r);
+  padding:18px 14px;text-align:center;box-shadow:var(--shadow);
+}
+.clock-card.spain{background:linear-gradient(135deg,var(--bg) 60%,rgba(255,199,44,0.18))}
+.clock-card.ph{background:linear-gradient(135deg,var(--bg) 60%,rgba(60,140,170,0.14))}
+.clock-card .flag{font-size:24px;line-height:1}
+.clock-card .place{font-family:'Fraunces',serif;font-size:13px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:var(--ink-2);margin-top:6px}
+.clock-card .time{font-family:'Fraunces',serif;font-size:38px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-0.02em;margin-top:4px}
+.clock-card .date{font-size:12px;color:var(--ink-2);margin-top:2px}
+.tz-hint{
+  margin-top:12px;padding:14px;border-radius:var(--r);background:var(--bg-2);
+  display:flex;align-items:center;gap:12px;
+}
+.tz-hint .icn{font-size:24px}
+.tz-hint .txt{font-size:13.5px;line-height:1.4}
+.tz-hint .txt b{font-family:'Fraunces',serif;font-weight:600;font-size:15px;display:block;margin-bottom:2px}
+
+/* ===== Town history ===== */
+.town-list{display:grid;gap:10px}
+.town-card{
+  background:var(--bg);border:1px solid var(--line);border-radius:var(--r);
+  padding:14px;cursor:pointer;
+}
+.town-card .hd{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.town-card h3{font-size:18px}
+.town-card .stars{color:var(--camino-deep);font-size:13px;letter-spacing:1px}
+.town-card .blurb{font-size:13.5px;line-height:1.5;color:var(--ink-2);margin-top:6px}
+.town-card .hl{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.town-card .chip{
+  font-size:11px;padding:3px 8px;border-radius:999px;
+  background:var(--bg-2);color:var(--ink-2);
+}
+
+/* ===== Near Me Now (panic screen) ===== */
+.panic-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.panic-btn{
+  background:var(--bg);border:2px solid var(--line);border-radius:18px;
+  padding:22px 14px;text-align:left;min-height:120px;
+  display:flex;flex-direction:column;justify-content:space-between;
+  box-shadow:var(--shadow);
+}
+.panic-btn:active{transform:scale(0.97)}
+.panic-btn[data-urgent="true"]{border-color:var(--terra);background:linear-gradient(135deg,var(--bg) 50%,rgba(200,75,49,0.12))}
+.panic-btn .icn{font-size:32px;line-height:1}
+.panic-btn .lbl{font-family:'Fraunces',serif;font-weight:600;font-size:18px;line-height:1.15}
+.panic-btn .sub{font-size:12px;color:var(--ink-2);margin-top:2px}
+.panic-share{
+  grid-column:1/-1;background:var(--ink);color:var(--bg);border:0;
+  padding:18px;border-radius:18px;font-family:'Fraunces',serif;font-weight:600;font-size:18px;
+  display:flex;align-items:center;justify-content:center;gap:10px;
+}
+.panic-share:active{transform:scale(0.98)}
+
+/* ===== Bottom nav ===== */
+.bottom-nav{
+  display:flex;border-top:1px solid var(--line);background:var(--bg);
+  padding-bottom:var(--safe-bottom);
+  flex:none;
+}
+.bottom-nav button{
+  flex:1;padding:10px 4px 8px;display:flex;flex-direction:column;align-items:center;gap:3px;
+  font-size:10.5px;font-weight:600;color:var(--ink-2);letter-spacing:0.02em;
+  position:relative;
+}
+.bottom-nav button.active{color:var(--ink)}
+.bottom-nav button.active::before{
+  content:'';position:absolute;top:0;left:50%;transform:translateX(-50%);
+  width:24px;height:3px;background:var(--camino);border-radius:0 0 3px 3px;
+}
+.bottom-nav svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+
+/* ===== Modal ===== */
+.modal{
+  position:fixed;inset:0;background:rgba(15,25,41,0.55);z-index:2000;
+  display:none;align-items:flex-end;justify-content:center;
+}
+.modal.open{display:flex}
+.modal .body{
+  background:var(--bg);border-radius:18px 18px 0 0;width:100%;max-height:85vh;
+  overflow:auto;padding:18px 18px calc(var(--safe-bottom) + 24px);
+  border-top:1px solid var(--line);
+}
+.modal .body .grab{width:40px;height:4px;background:var(--line);border-radius:2px;margin:0 auto 14px}
+.modal h2{font-size:22px;margin-bottom:4px;font-family:'Fraunces',serif}
+.modal .meta{color:var(--ink-2);font-size:13px;margin-bottom:14px}
+.modal p{line-height:1.55;font-size:14.5px;margin:0 0 12px}
+.modal .field{margin-bottom:14px}
+.modal label{font-size:12px;font-weight:600;color:var(--ink-2);text-transform:uppercase;letter-spacing:0.06em;display:block;margin-bottom:5px}
+.modal input,.modal textarea,.modal select{
+  width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:10px;
+  background:var(--bg);color:var(--ink);font:inherit;font-size:15px;
+}
+.modal textarea{min-height:60px;resize:vertical}
+.modal .actions{display:flex;gap:8px;margin-top:8px}
+.modal .actions button{flex:1;padding:12px;border-radius:10px;font-weight:600;font-size:14px}
+.modal .btn-primary{background:var(--ink);color:var(--bg)}
+.modal .btn-secondary{background:var(--bg-2);color:var(--ink)}
+.modal .info-row{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--line);font-size:14px}
+.modal .info-row:last-of-type{border-bottom:0}
+.modal .info-row b{font-weight:600}
+
+/* ===== Toast ===== */
+.toast{
+  position:fixed;left:50%;bottom:calc(var(--nav-h) + var(--safe-bottom) + 18px);
+  transform:translateX(-50%) translateY(20px);opacity:0;
+  background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:999px;
+  font-size:13px;font-weight:500;z-index:3000;pointer-events:none;
+  transition:opacity .2s,transform .2s;
+}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* ===== Spinner ===== */
+.spin{
+  width:18px;height:18px;border:2px solid var(--line);border-top-color:var(--camino);
+  border-radius:50%;animation:rot 0.8s linear infinite;display:inline-block;
+}
+@keyframes rot{to{transform:rotate(360deg)}}
+
+/* ===== Misc ===== */
+.empty-state{text-align:center;padding:40px 20px;color:var(--ink-2)}
+.empty-state .ico{font-size:48px;margin-bottom:8px;opacity:0.5}
+.row-flex{display:flex;align-items:center;gap:8px}
+.btn-ghost{
+  background:var(--bg-2);padding:10px 14px;border-radius:10px;
+  font-weight:600;font-size:13.5px;display:inline-flex;align-items:center;gap:6px;
+}
+.walking-toggle{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:14px;background:var(--bg-2);border-radius:var(--r);margin-bottom:12px;
+}
+.walking-toggle .lbl b{font-family:'Fraunces',serif;font-size:15px;display:block}
+.walking-toggle .lbl span{font-size:12px;color:var(--ink-2)}
+.toggle{
+  width:48px;height:28px;background:var(--line);border-radius:999px;position:relative;
+  transition:background .2s;flex:none;
+}
+.toggle::after{
+  content:'';position:absolute;top:2px;left:2px;width:24px;height:24px;
+  background:#fff;border-radius:50%;transition:left .2s;
+  box-shadow:0 1px 3px rgba(0,0,0,0.2);
+}
+.toggle.on{background:var(--camino-deep)}
+.toggle.on::after{left:22px}
+</style>
+</head>
+<body>
+
+<header class="app-head">
+  <div class="row">
+    <div class="brand">
+      <svg class="shell" viewBox="0 0 24 24" fill="none">
+        <path d="M12 3 C5 3 3 9 3 13 c0 4 2 8 9 8 7 0 9-4 9-8 0-4-2-10-9-10z" fill="#FFC72C" stroke="#0F1929" stroke-width="1.4"/>
+        <path d="M12 3 v18 M7 5 c-1 4-2 9 0 14 M17 5 c1 4 2 9 0 14 M5 9 c0 4 1 8 3 11 M19 9 c0 4-1 8-3 11" stroke="#0F1929" stroke-width="1" fill="none" stroke-linecap="round"/>
+      </svg>
+      Camino Companion
+    </div>
+    <div class="stage-pill" id="stagePill">
+      <span class="dot"></span><span id="stagePillTxt">Stage —</span>
+    </div>
+  </div>
+  <div class="stage-bar"><span id="stageBarFill" style="width:0%"></span></div>
+  <div class="stage-meta">
+    <span id="stageDone">0.0 km walked</span>
+    <span id="stagePct">0%</span>
+    <span id="stageRemain">— km to go</span>
+  </div>
+</header>
+
+<main>
+  <!-- ============ MAP VIEW ============ -->
+  <section class="view view-map active" id="viewMap">
+    <div id="map"></div>
+    <div class="map-panel" id="mapPanel">
+      <div class="head" id="mapPanelHead">
+        🐚 <span>Layers</span>
+        <svg class="chev" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+      </div>
+      <div class="body" id="mapPanelBody"></div>
+    </div>
+    <div class="weather-strip" id="weatherStrip" hidden></div>
+    <div class="map-controls">
+      <button class="map-btn" id="btnLocate" aria-label="Center on me">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+      </button>
+      <button class="map-btn" id="btnFitRoute" aria-label="Fit whole route">
+        <svg viewBox="0 0 24 24"><path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4"/><path d="M9 13l2 2 4-4" stroke-linecap="round"/></svg>
+      </button>
+      <button class="map-btn" id="btnZoomIn" aria-label="Zoom in">
+        <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" stroke-linecap="round"/></svg>
+      </button>
+      <button class="map-btn" id="btnZoomOut" aria-label="Zoom out">
+        <svg viewBox="0 0 24 24"><path d="M5 12h14" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <div class="map-status" id="mapStatus">
+      <span class="gps"></span>
+      <div class="txt">
+        <b id="msTitle">Waiting for GPS…</b>
+        <span id="msSub">Tap the locate button or enable location.</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ TRIP / ITINERARY VIEW ============ -->
+  <section class="view scroll" id="viewStages">
+    <div class="section-title">Manila → Camino → Manila</div>
+    <div id="stagesList"></div>
+    <div class="section-title">Hotels & Bookings</div>
+    <div id="hotelsList"></div>
+  </section>
+
+  <!-- ============ NEARBY VIEW ============ -->
+  <section class="view scroll" id="viewNearby">
+    <div class="section-title">Quick Nearby</div>
+    <div class="near-grid" id="nearGrid"></div>
+    <div class="section-title">Near Me Now</div>
+    <div class="panic-grid" id="panicGrid"></div>
+  </section>
+
+  <!-- ============ TIME VIEW ============ -->
+  <section class="view scroll" id="viewTime">
+    <div class="section-title">Two Time Zones</div>
+    <div class="time-grid" id="timeGrid"></div>
+    <div class="tz-hint" id="tzHint">
+      <div class="icn">🌅</div>
+      <div class="txt"><b>Loading…</b><span></span></div>
+    </div>
+    <div class="section-title">Town History</div>
+    <div class="town-list" id="townList"></div>
+  </section>
+
+  <!-- ============ MORE VIEW ============ -->
+  <section class="view scroll" id="viewMore">
+    <div class="section-title">Walking</div>
+    <div class="walking-toggle">
+      <div class="lbl"><b>Walking Mode</b><span>Keeps screen on while moving</span></div>
+      <div class="toggle" id="wakeToggle"></div>
+    </div>
+    <div class="section-title">Emergency</div>
+    <div id="emergencyList"></div>
+    <div class="section-title">Settings</div>
+    <div class="card">
+      <div class="info-row"><span>Distance unit</span><b>Kilometres</b></div>
+      <div class="info-row"><span>Map source</span><b>OpenStreetMap</b></div>
+      <div class="info-row"><span>Nearby data</span><b>Overpass API</b></div>
+      <div class="info-row"><span>Spain timezone</span><b>Europe/Madrid</b></div>
+      <div class="info-row"><span>Home timezone</span><b>Asia/Manila</b></div>
+    </div>
+    <button class="btn-ghost" style="width:100%;justify-content:center;margin-top:8px" id="btnReset">
+      Reset itinerary to default
+    </button>
+    <p class="muted" style="font-size:11.5px;color:var(--ink-2);margin-top:18px;text-align:center;line-height:1.5">
+      Camino Companion · v1.0<br>
+      Map © OpenStreetMap contributors · Nearby © Overpass API<br>
+      Buen Camino 🐚
+    </p>
+  </section>
+</main>
+
+<nav class="bottom-nav">
+  <button data-view="viewMap" class="active">
+    <svg viewBox="0 0 24 24"><path d="M9 19l-6-3V5l6 3 6-3 6 3v11l-6-3-6 3z"/><path d="M9 8v11M15 5v11"/></svg>
+    Map
+  </button>
+  <button data-view="viewStages">
+    <svg viewBox="0 0 24 24"><circle cx="6" cy="6" r="2"/><circle cx="18" cy="18" r="2"/><circle cx="12" cy="12" r="2"/><path d="M8 6h6M8 12h2M14 18h2M6 8v3M12 14v3"/></svg>
+    Trip
+  </button>
+  <button data-view="viewNearby">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="9"/></svg>
+    Nearby
+  </button>
+  <button data-view="viewTime">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+    Time
+  </button>
+  <button data-view="viewMore">
+    <svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>
+    More
+  </button>
+</nav>
+
+<!-- Bottom sheet for nearby results -->
+<div class="sheet" id="poiSheet">
+  <div class="grab"></div>
+  <h2><span id="poiTitle">Nearby</span><button id="poiClose">Close</button></h2>
+  <p class="muted" id="poiSub"></p>
+  <div id="poiResults"></div>
+</div>
+
+<!-- Modal (town detail / hotel edit / confirm) -->
+<div class="modal" id="modal">
+  <div class="body">
+    <div class="grab"></div>
+    <div id="modalContent"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+   integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+   crossorigin=""></script>
+
+<script>
+/* =========================================================
+   CAMINO COMPANION · single-file PWA
+   ========================================================= */
+
+/* -------- Route data: Vigo → Santiago de Compostela --------
+   Stages, alternative tracks, and Wise Pilgrim feature POIs are loaded
+   from route.json + features.json at boot. See README for how those
+   files were generated from the source KMLs.
+*/
+let STAGES = [];           // populated by loadCaminoData()
+let ALTERNATIVES = [];     // optional side-trips and shortcut variants
+let FEATURES = [];         // 295 curated Wise Pilgrim POIs along the route
+let ITINERARY = [];        // full trip: flights, layovers, cities, walking stages
+
+const TOWNS = [
+  {
+    name: 'Vigo', latlng:[42.2406,-8.7207], rating: 3,
+    blurb: 'Galicia\'s largest city and a working port. The Camino Portugués Costa traditionally starts at the Concatedral de Santa María, climbing inland away from the rías.',
+    highlights: ['Concatedral de Santa María','Castelo do Castro','O Berbés old quarter','Mejillones (mussels)']
+  },
+  {
+    name: 'Redondela', latlng:[42.2833,-8.6092], rating: 3,
+    blurb: 'Town of the Viaducts, named for two 19th-century railway bridges that loom over its center. First Galician overnight for many coastal pilgrims.',
+    highlights: ['Iglesia de Santiago','Two stone viaducts','Festa da Coca (May)','Choco (cuttlefish)']
+  },
+  {
+    name: 'Arcade', latlng:[42.3441,-8.6053], rating: 3,
+    blurb: 'Tiny estuary town famous across Galicia for oysters. Festa da Ostra in early April. Cross the medieval Ponte Sampaio just before arriving.',
+    highlights: ['Ponte Sampaio (1809 battle site)','Ostras de Arcade','Iglesia de Santiago']
+  },
+  {
+    name: 'Pontevedra', latlng:[42.4310,-8.6444], rating: 5,
+    blurb: 'One of the loveliest pedestrianised old towns in Spain. The Santuario de la Virgen Peregrina is shaped like a scallop shell — completely unique on the entire Camino network.',
+    highlights: ['Santuario de la Peregrina','Plaza de la Leña','Basílica de Santa María','Empanada de millo','Pulpo a feira']
+  },
+  {
+    name: 'Caldas de Reis', latlng:[42.6028,-8.6406], rating: 4,
+    blurb: 'Roman thermal springs town. The free public hot fountain in the center is exactly the foot-bath you\'ll dream of after a long stage.',
+    highlights: ['Fuente termal (free hot foot-bath)','Iglesia de Santo Tomás','Río Umia bridge','Cocido gallego']
+  },
+  {
+    name: 'Padrón', latlng:[42.7383,-8.6608], rating: 5,
+    blurb: 'Where, by tradition, the stone boat carrying Saint James\'s body landed. The actual mooring stone (the padrón) sits beneath the altar of Iglesia de Santiago. Birthplace of the poet Rosalía de Castro.',
+    highlights: ['Iglesia de Santiago (the padrón stone)','Casa-Museo Rosalía de Castro','Pementos de Padrón','Convento del Carmen']
+  },
+  {
+    name: 'Santiago de Compostela', latlng:[42.8806,-8.5446], rating: 5,
+    blurb: 'The destination. The Cathedral, the embrace of Saint James, the Pilgrim Mass at noon and 7:30pm, and the Botafumeiro swinging on feast days. You made it.',
+    highlights: ['Catedral de Santiago','Praza do Obradoiro','Pilgrim Office (Compostela certificate)','Tarta de Santiago','Mercado de Abastos']
+  }
+];
+
+let HOTELS_DEFAULT = []; // built after STAGES loads
+
+const EMERGENCY_DEFAULT = [
+  { label: 'Spain emergency', value: '112', type: 'phone' },
+  { label: 'Guardia Civil', value: '062', type: 'phone' },
+  { label: 'Health (SERGAS)', value: '900 400 116', type: 'phone' },
+  { label: 'PH Embassy Madrid', value: '+34 91 782 4830', type: 'phone' },
+  { label: 'Insurance policy', value: '', type: 'text', editable: true },
+  { label: 'Family contact', value: '', type: 'text', editable: true }
+];
+
+const NEAR_CATEGORIES = [
+  { id:'toilets',  label:'Restroom',     sub:'amenity=toilets',          query:'node["amenity"="toilets"]', icon:'<svg viewBox="0 0 24 24"><path d="M9 4 v6 M15 4 v6 M9 10 h6 v8 a2 2 0 0 1-6 0z"/></svg>' },
+  { id:'lodging',  label:'Hotel/Hostel', sub:'tourism=hotel,hostel,...', query:'node["tourism"~"^(hotel|hostel|guest_house|motel|apartment|alpine_hut)$"]; way["tourism"~"^(hotel|hostel|guest_house)$"]', icon:'<svg viewBox="0 0 24 24"><path d="M3 10h18v9H3z"/><path d="M3 10V6l9-3 9 3v4M8 14h2M14 14h2"/></svg>' },
+  { id:'food',     label:'Restaurant',   sub:'café, restaurant, bar',    query:'node["amenity"~"^(restaurant|cafe|bar|fast_food|pub|food_court)$"]', icon:'<svg viewBox="0 0 24 24"><path d="M5 3v8a3 3 0 0 0 6 0V3M8 11v10M17 3c-2 0-3 4-3 7s1 4 3 4 v7"/></svg>' },
+  { id:'transit',  label:'Transit',      sub:'bus, train, taxi',         query:'node["highway"="bus_stop"]; node["public_transport"="stop_position"]; node["railway"="station"]; node["amenity"="taxi"]', icon:'<svg viewBox="0 0 24 24"><rect x="6" y="4" width="12" height="14" rx="2"/><path d="M6 12h12M9 18v2M15 18v2"/><circle cx="9" cy="15" r="1"/><circle cx="15" cy="15" r="1"/></svg>' },
+  { id:'pharmacy', label:'Pharmacy',     sub:'amenity=pharmacy',         query:'node["amenity"="pharmacy"]', icon:'<svg viewBox="0 0 24 24"><path d="M12 6v12M6 12h12"/><circle cx="12" cy="12" r="9"/></svg>' },
+  { id:'water',    label:'Water',        sub:'fountains & taps',         query:'node["amenity"="drinking_water"]; node["man_made"="water_tap"]; node["amenity"="water_point"]', icon:'<svg viewBox="0 0 24 24"><path d="M12 3 c-4 6-6 9-6 12 a6 6 0 0 0 12 0 c0-3-2-6-6-12z"/></svg>' },
+  { id:'church',   label:'Church',       sub:'churches & landmarks',     query:'node["amenity"="place_of_worship"]; way["amenity"="place_of_worship"]; node["historic"~"."]', icon:'<svg viewBox="0 0 24 24"><path d="M12 3v6M9 6h6M5 21V11l7-4 7 4v10M9 21v-5h6v5"/></svg>' }
+];
+
+const PANIC_BUTTONS = [
+  { id:'toilets',  label:'Bathroom',  sub:'Nearest open',     icon:'🚻', urgent:true },
+  { id:'food',     label:'Food',      sub:'Eat somewhere',    icon:'🍴', urgent:false },
+  { id:'lodging',  label:'Bed',       sub:'Crash for tonight',icon:'🛏️', urgent:false },
+  { id:'transit',  label:'Transit',   sub:'Bus / train / taxi',icon:'🚌', urgent:true },
+  { id:'pharmacy', label:'Pharmacy',  sub:'Need help fast',   icon:'💊', urgent:true },
+  { id:'water',    label:'Water',     sub:'Refill bottle',    icon:'💧', urgent:false }
+];
+
+/* =========================================================
+   STATE & STORAGE
+   ========================================================= */
+const STORE_KEYS = {
+  hotels:'cc.hotels',
+  emergency:'cc.emergency',
+  currentStage:'cc.currentStage',
+  itineraryEdits:'cc.itineraryEdits',
+  itineraryCustom:'cc.itineraryCustom'
+};
+const store = {
+  get(k, fallback){ try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : fallback; }catch{ return fallback; } },
+  set(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch{} }
+};
+
+const state = {
+  pos: null,            // [lat, lng]
+  posAccuracy: null,
+  watching: false,
+  currentStage: store.get(STORE_KEYS.currentStage, 1),
+  hotels: store.get(STORE_KEYS.hotels, []),  // re-keyed after STAGES loads
+  emergency: store.get(STORE_KEYS.emergency, EMERGENCY_DEFAULT),
+  itineraryEdits: store.get(STORE_KEYS.itineraryEdits, {}),   // {itemId: {fields...}}
+  itineraryCustom: store.get(STORE_KEYS.itineraryCustom, []), // [{id, type, ...}]
+  wakeLock: null,
+  walkingMode: false,
+  featureFilter: store.get('cc.featureFilter', { lodging:true, food:true, water:true, church:true, shop:false, other:false }),
+  showFeatures: store.get('cc.showFeatures', true),
+  showAlternatives: store.get('cc.showAlternatives', false)
+};
+
+/* =========================================================
+   GEO HELPERS
+   ========================================================= */
+function haversine(a, b){
+  const R = 6371000;
+  const toRad = d => d * Math.PI / 180;
+  const dLat = toRad(b[0]-a[0]), dLng = toRad(b[1]-a[1]);
+  const lat1 = toRad(a[0]), lat2 = toRad(b[0]);
+  const x = Math.sin(dLat/2)**2 + Math.sin(dLng/2)**2 * Math.cos(lat1)*Math.cos(lat2);
+  return 2 * R * Math.asin(Math.sqrt(x));
+}
+// Project a point onto a polyline; return {distAlong, totalLen, idx, snap, distFrom}
+function projectOnRoute(p, line){
+  let totalLen = 0;
+  const segLens = [];
+  for (let i=0; i<line.length-1; i++){
+    const L = haversine(line[i], line[i+1]);
+    segLens.push(L); totalLen += L;
+  }
+  let bestDist = Infinity, bestSnap = line[0], bestAlong = 0, bestIdx = 0;
+  let along = 0;
+  for (let i=0; i<line.length-1; i++){
+    const A = line[i], B = line[i+1];
+    const segLen = segLens[i];
+    if (segLen < 1){ along += segLen; continue; }
+    // approx local linear projection
+    const ax = A[1], ay = A[0], bx = B[1], by = B[0], px = p[1], py = p[0];
+    const dx = bx-ax, dy = by-ay;
+    const t = Math.max(0, Math.min(1, ((px-ax)*dx + (py-ay)*dy) / (dx*dx + dy*dy)));
+    const sx = ax + dx*t, sy = ay + dy*t;
+    const snap = [sy, sx];
+    const d = haversine(p, snap);
+    if (d < bestDist){
+      bestDist = d; bestSnap = snap; bestAlong = along + segLen*t; bestIdx = i;
+    }
+    along += segLen;
+  }
+  return { distAlong: bestAlong, totalLen, idx: bestIdx, snap: bestSnap, distFrom: bestDist };
+}
+function fmtKm(meters){
+  if (meters == null || isNaN(meters)) return '— km';
+  if (meters < 1000) return Math.round(meters) + ' m';
+  return (meters/1000).toFixed(meters < 10000 ? 1 : 1) + ' km';
+}
+
+/* =========================================================
+   MAP
+   ========================================================= */
+let map, routeLayer, featuresLayer, alternativesLayer, pilgrimMarker, accuracyCircle, snapMarker, nearbyLayer;
+
+const FEATURE_STYLES = {
+  lodging:      { color:'#C2185B', emoji:'🛏', label:'Albergue/Hotel' },
+  food:         { color:'#673AB7', emoji:'🍴', label:'Food' },
+  water:        { color:'#0288D1', emoji:'💧', label:'Water' },
+  church:       { color:'#795548', emoji:'⛪', label:'Church' },
+  shop:         { color:'#26A69A', emoji:'🛒', label:'Shop' },
+  restroom:     { color:'#5C7148', emoji:'🚻', label:'Restroom' },
+  monument:     { color:'#FBC02D', emoji:'🗿', label:'Monument' },
+  historic:     { color:'#8D6E63', emoji:'🏛', label:'Historic' },
+  bridge:       { color:'#607D8B', emoji:'🌉', label:'Bridge' },
+  rest:         { color:'#7CB342', emoji:'🌳', label:'Rest area' },
+  viewpoint:    { color:'#4E342E', emoji:'👁', label:'Viewpoint' },
+  info:         { color:'#FFD600', emoji:'ℹ', label:'Info' },
+  transit:      { color:'#1976D2', emoji:'🚌', label:'Transit' },
+  'route-marker': { color:'#F57C00', emoji:'➡', label:'Route turn' },
+  civic:        { color:'#37474F', emoji:'🏛', label:'Civic' },
+  landmark:     { color:'#00838F', emoji:'📍', label:'Landmark' },
+  other:        { color:'#9E9E9E', emoji:'•', label:'Other' }
+};
+
+function initMap(){
+  map = L.map('map', { zoomControl:false, attributionControl:true }).setView([42.55, -8.65], 9);
+  const tileUrl = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+  L.tileLayer(tileUrl, {
+    maxZoom: 19,
+    attribution: '© OpenStreetMap'
+  }).addTo(map);
+
+  routeLayer = L.layerGroup().addTo(map);
+  featuresLayer = L.layerGroup();           // toggle-able
+  alternativesLayer = L.layerGroup();       // toggle-able
+  nearbyLayer = L.layerGroup().addTo(map);
+
+  if (state.showFeatures) map.addLayer(featuresLayer);
+  if (state.showAlternatives) map.addLayer(alternativesLayer);
+
+  // Controls
+  document.getElementById('btnZoomIn').onclick  = () => map.zoomIn();
+  document.getElementById('btnZoomOut').onclick = () => map.zoomOut();
+  document.getElementById('btnLocate').onclick  = () => {
+    if (state.pos) map.setView(state.pos, Math.max(map.getZoom(), 14), { animate:true });
+    else { startGeolocation(true); }
+  };
+  document.getElementById('btnFitRoute').onclick = () => {
+    if (!STAGES.length){ toast('Route not loaded yet'); return; }
+    const allPts = STAGES.flatMap(s => s.waypoints);
+    map.fitBounds(L.latLngBounds(allPts), { padding:[40,40] });
+  };
+}
+
+function drawRoute(){
+  if (!routeLayer) return;
+  routeLayer.clearLayers();
+  alternativesLayer.clearLayers();
+
+  if (!STAGES.length) return;
+
+  // Per-stage colored polylines
+  const allPts = [];
+  STAGES.forEach((s, idx) => {
+    const passed = (idx + 1) < state.currentStage;
+    const current = (idx + 1) === state.currentStage;
+    L.polyline(s.waypoints, {
+      color: passed ? '#5C7148' : current ? '#FFC72C' : '#C84B31',
+      weight: current ? 5 : 4, opacity: passed ? 0.55 : 0.85,
+      dashArray: current ? null : (passed ? null : '6,6')
+    }).addTo(routeLayer);
+    s.waypoints.forEach(p => allPts.push(p));
+  });
+
+  // Stage-boundary town markers (start of each stage + final)
+  const townPoints = STAGES.map(s => ({ name: s.from, latlng: s.fromLatLng, idx: s.id }));
+  const last = STAGES[STAGES.length - 1];
+  townPoints.push({ name: last.to, latlng: last.toLatLng, idx: last.id + 1 });
+  townPoints.forEach(t => {
+    let cls = 'town-marker';
+    if (t.idx <= state.currentStage) cls += t.idx === state.currentStage + 1 ? ' current' : (t.idx <= state.currentStage ? ' passed' : '');
+    if (t.idx === state.currentStage) cls += ' current';
+    const blurbTown = TOWNS.find(x => x.name === t.name || (x.name === 'Santiago de Compostela' && t.name === 'Santiago'));
+    const m = L.marker(t.latlng, {
+      icon: L.divIcon({ className:'', html:`<div class="${cls}"></div>`, iconSize:[16,16], iconAnchor:[8,8] }),
+      title: t.name
+    }).addTo(routeLayer);
+    m.bindTooltip(t.name, { direction:'top', offset:[0,-6] });
+    if (blurbTown) m.on('click', () => openTownModal(blurbTown));
+    else m.on('click', () => toast(t.name));
+  });
+
+  // Alternative tracks
+  ALTERNATIVES.forEach(alt => {
+    const color = alt.kind === 'senda-litoral' ? '#F57C00' :
+                  alt.kind === 'side-trip' ? '#7B1FA2' :
+                  alt.kind === 'shortcut' ? '#0288D1' : '#9C27B0';
+    L.polyline(alt.waypoints, {
+      color, weight: 3, opacity: 0.8, dashArray: '4,6'
+    }).bindTooltip(`${alt.name} · ${alt.km} km`, { direction:'top' })
+      .addTo(alternativesLayer);
+  });
+
+  // Initial fit
+  if (allPts.length){
+    map.fitBounds(L.latLngBounds(allPts), { padding:[40,40] });
+  }
+}
+
+function drawFeatures(){
+  if (!featuresLayer) return;
+  featuresLayer.clearLayers();
+  FEATURES.forEach(f => {
+    if (!state.featureFilter[f.category]) return;
+    const style = FEATURE_STYLES[f.category] || FEATURE_STYLES.other;
+    const m = L.circleMarker([f.lat, f.lng], {
+      radius: 5, color: style.color, weight: 2, fillColor: '#fff', fillOpacity: 0.95
+    }).addTo(featuresLayer);
+    m.bindTooltip(`${style.emoji} ${f.name}`, { direction:'top', offset:[0,-4] });
+    m.on('click', () => openFeatureModal(f));
+  });
+}
+
+function openFeatureModal(f){
+  const style = FEATURE_STYLES[f.category] || FEATURE_STYLES.other;
+  const desc = f.description || '';
+  const url = desc.match(/https?:\/\/[^\s<>"]+/);
+  const cleanDesc = desc.replace(/https?:\/\/[^\s<>"]+/g, '').trim().replace(/\s*·\s*$/, '');
+  showModal(`
+    <h2>${style.emoji} ${escapeHtml(f.name)}</h2>
+    <div class="meta">${style.label} · Stage ${f.stage}</div>
+    ${cleanDesc ? `<p>${escapeHtml(cleanDesc)}</p>` : ''}
+    ${url ? `<a href="${escapeAttr(url[0])}" target="_blank" rel="noopener" class="btn-ghost" style="display:inline-flex;margin-bottom:12px">🔗 Open booking link</a>` : ''}
+    <div class="actions">
+      <button class="btn-secondary" id="m_close">Close</button>
+      <button class="btn-primary" id="m_open">Walk here</button>
+    </div>
+  `);
+  document.getElementById('m_close').onclick = closeModal;
+  document.getElementById('m_open').onclick = () => {
+    window.open(`https://www.google.com/maps/dir/?api=1&destination=${f.lat},${f.lng}&travelmode=walking`, '_blank');
+  };
+}
+
+function renderMapPanel(){
+  const body = document.getElementById('mapPanelBody');
+  if (!body) return;
+  // Count features by category that exist in our data
+  const counts = {};
+  FEATURES.forEach(f => { counts[f.category] = (counts[f.category] || 0) + 1; });
+
+  // Build category chips for categories that actually have data
+  const filterCats = ['lodging','food','water','church','shop','historic','bridge','viewpoint','rest','monument','transit','other'];
+  const chipsHtml = filterCats
+    .filter(c => counts[c])
+    .map(c => {
+      const s = FEATURE_STYLES[c] || FEATURE_STYLES.other;
+      const on = state.featureFilter[c];
+      return `<button class="chip-filter ${on?'on':''}" data-cat="${c}">
+        <span class="dot" style="background:${s.color}"></span>
+        ${s.emoji} ${s.label}
+        <span style="color:var(--ink-2);font-variant-numeric:tabular-nums">${counts[c]}</span>
+      </button>`;
+    }).join('');
+
+  body.innerHTML = `
+    <div class="toggle-row">
+      <div><b>Wise Pilgrim POIs</b><div style="font-size:11px;color:var(--ink-2);margin-top:2px">${FEATURES.length} curated places on route</div></div>
+      <div class="sm-toggle ${state.showFeatures?'on':''}" id="togFeatures"></div>
+    </div>
+    <div class="filter-grid">${chipsHtml || '<div style="color:var(--ink-2);font-size:12px">No features loaded</div>'}</div>
+    <div class="toggle-row" style="margin-top:8px;border-top:1px solid var(--line);padding-top:12px">
+      <div><b>Alternative tracks</b><div style="font-size:11px;color:var(--ink-2);margin-top:2px">${ALTERNATIVES.length} side-trips & shortcuts</div></div>
+      <div class="sm-toggle ${state.showAlternatives?'on':''}" id="togAlts"></div>
+    </div>
+  `;
+
+  // Wire feature layer toggle
+  document.getElementById('togFeatures').onclick = () => {
+    state.showFeatures = !state.showFeatures;
+    store.set('cc.showFeatures', state.showFeatures);
+    if (state.showFeatures){ map.addLayer(featuresLayer); }
+    else { map.removeLayer(featuresLayer); }
+    renderMapPanel();
+  };
+
+  // Wire alternatives toggle
+  document.getElementById('togAlts').onclick = () => {
+    state.showAlternatives = !state.showAlternatives;
+    store.set('cc.showAlternatives', state.showAlternatives);
+    if (state.showAlternatives){ map.addLayer(alternativesLayer); }
+    else { map.removeLayer(alternativesLayer); }
+    renderMapPanel();
+  };
+
+  // Wire category chips
+  body.querySelectorAll('.chip-filter').forEach(btn => {
+    btn.onclick = () => {
+      const c = btn.dataset.cat;
+      state.featureFilter[c] = !state.featureFilter[c];
+      store.set('cc.featureFilter', state.featureFilter);
+      drawFeatures();
+      renderMapPanel();
+    };
+  });
+}
+
+// Map panel collapse/expand
+document.addEventListener('DOMContentLoaded', () => {
+  const head = document.getElementById('mapPanelHead');
+  const panel = document.getElementById('mapPanel');
+  if (head && panel){
+    head.onclick = () => panel.classList.toggle('open');
+  }
+});
+
+function updatePilgrimMarker(){
+  if (!state.pos) return;
+  if (!pilgrimMarker){
+    pilgrimMarker = L.marker(state.pos, {
+      icon: L.divIcon({ className:'', html:'<div class="pilgrim-marker"></div>', iconSize:[24,24], iconAnchor:[12,12] }),
+      zIndexOffset: 1000
+    }).addTo(map);
+  } else {
+    pilgrimMarker.setLatLng(state.pos);
+  }
+  if (accuracyCircle) accuracyCircle.remove();
+  if (state.posAccuracy && state.posAccuracy < 200){
+    accuracyCircle = L.circle(state.pos, {
+      radius: state.posAccuracy, color:'#FFC72C', fillColor:'#FFC72C',
+      fillOpacity: 0.08, weight: 1
+    }).addTo(map);
+  }
+}
+
+/* =========================================================
+   GEOLOCATION
+   ========================================================= */
+let watchId = null;
+function startGeolocation(centerOnFix){
+  if (!navigator.geolocation){
+    setStatus('GPS unavailable on this device.', '');
+    return;
+  }
+  if (watchId !== null) return;
+  state.watching = true;
+  document.getElementById('mapStatus').classList.add('live');
+  setStatus('Getting your position…', 'Stay in the open for a clearer fix.');
+
+  watchId = navigator.geolocation.watchPosition(
+    pos => {
+      state.pos = [pos.coords.latitude, pos.coords.longitude];
+      state.posAccuracy = pos.coords.accuracy;
+      updatePilgrimMarker();
+      updateProgress();
+      if (centerOnFix){
+        map.setView(state.pos, 14, { animate:true });
+        centerOnFix = false;
+      }
+    },
+    err => {
+      document.getElementById('mapStatus').classList.remove('live');
+      setStatus('GPS denied or unavailable.', err.message || 'Enable location to track progress.');
+    },
+    { enableHighAccuracy:true, maximumAge:5000, timeout:20000 }
+  );
+}
+
+function setStatus(title, sub){
+  document.getElementById('msTitle').textContent = title;
+  document.getElementById('msSub').textContent  = sub || '';
+}
+
+/* =========================================================
+   WEATHER (Open-Meteo · no API key)
+   ========================================================= */
+const WX_CODES = {
+  0:['☀️','Clear'], 1:['🌤','Mainly clear'], 2:['⛅','Partly cloudy'], 3:['☁️','Overcast'],
+  45:['🌫','Fog'], 48:['🌫','Rime fog'],
+  51:['🌦','Light drizzle'], 53:['🌦','Drizzle'], 55:['🌦','Heavy drizzle'],
+  56:['🌧','Freezing drizzle'], 57:['🌧','Freezing drizzle'],
+  61:['🌧','Light rain'], 63:['🌧','Rain'], 65:['🌧','Heavy rain'],
+  66:['🌧','Freezing rain'], 67:['🌧','Freezing rain'],
+  71:['🌨','Light snow'], 73:['🌨','Snow'], 75:['🌨','Heavy snow'], 77:['🌨','Snow grains'],
+  80:['🌦','Light showers'], 81:['🌧','Showers'], 82:['⛈','Heavy showers'],
+  85:['🌨','Snow showers'], 86:['🌨','Snow showers'],
+  95:['⛈','Thunderstorm'], 96:['⛈','Thunderstorm + hail'], 99:['⛈','Thunderstorm + hail']
+};
+
+let weatherCache = { ts: 0, key: '', data: null };
+
+async function refreshWeather(){
+  // Use the *destination* of the current stage as the weather target —
+  // tells you what to expect at the end of today's walk.
+  if (!STAGES.length) return;
+  const stage = STAGES[Math.min(state.currentStage - 1, STAGES.length - 1)];
+  if (!stage) return;
+  const [lat, lng] = stage.toLatLng;
+  const town = stage.to;
+  const key = `${lat.toFixed(2)},${lng.toFixed(2)}`;
+  const fresh = Date.now() - weatherCache.ts < 30 * 60 * 1000;
+  if (weatherCache.key === key && fresh && weatherCache.data){
+    renderWeather(weatherCache.data, town);
+    return;
+  }
+
+  const strip = document.getElementById('weatherStrip');
+  if (strip){ strip.hidden = false; strip.innerHTML = `<div class="wbox loading"><span class="wico">⏳</span> Loading weather…</div>`; }
+
+  try {
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,weather_code&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,weather_code&timezone=Europe%2FMadrid&forecast_days=2`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('Weather HTTP ' + res.status);
+    const json = await res.json();
+    weatherCache = { ts: Date.now(), key, data: json };
+    renderWeather(json, town);
+  } catch (e) {
+    console.warn('Weather fetch failed:', e);
+    if (strip) strip.hidden = true;
+  }
+}
+
+function renderWeather(d, town){
+  const strip = document.getElementById('weatherStrip');
+  if (!strip) return;
+  strip.hidden = false;
+
+  const tNow = d.current?.temperature_2m;
+  const cNow = d.current?.weather_code;
+  const [icoNow, lblNow] = WX_CODES[cNow] || ['•', '—'];
+
+  const tmrMax = d.daily?.temperature_2m_max?.[1];
+  const tmrMin = d.daily?.temperature_2m_min?.[1];
+  const cTmr = d.daily?.weather_code?.[1];
+  const tmrPop = d.daily?.precipitation_probability_max?.[1];
+  const [icoTmr] = WX_CODES[cTmr] || ['•'];
+
+  strip.innerHTML = `
+    <div class="wbox" title="Weather at ${escapeHtml(town)}">
+      <div class="wcol">
+        <span class="wico">${icoNow}</span>
+        <div>
+          <div class="wlbl">${escapeHtml(town)}</div>
+          <b>${Math.round(tNow)}°</b>
+        </div>
+      </div>
+      <div class="wsep"></div>
+      <div class="wcol">
+        <span class="wico">${icoTmr}</span>
+        <div>
+          <div class="wlbl">Tomorrow${tmrPop != null ? ' · ' + tmrPop + '% rain' : ''}</div>
+          <b>${Math.round(tmrMin)}° / ${Math.round(tmrMax)}°</b>
+        </div>
+      </div>
+    </div>
+  `;
+  strip.querySelector('.wbox').onclick = () => {
+    toast(`${town} · now ${lblNow}, ${Math.round(tNow)}°`);
+  };
+}
+
+/* =========================================================
+   PROGRESS CALCULATION
+   ========================================================= */
+function updateProgress(){
+  if (!state.pos) return;
+  if (!STAGES.length) return;  // route not loaded yet
+  // Find which stage is closest to the pilgrim
+  let bestStage = state.currentStage, bestDist = Infinity, bestProj = null;
+  STAGES.forEach((s, idx) => {
+    const proj = projectOnRoute(state.pos, s.waypoints);
+    if (proj.distFrom < bestDist){
+      bestDist = proj.distFrom;
+      bestStage = idx + 1;
+      bestProj = proj;
+    }
+  });
+
+  // If we're far from any stage line (>500m) keep current stage but show "off route"
+  const onRoute = bestDist < 500;
+  if (onRoute){
+    if (bestStage !== state.currentStage){
+      state.currentStage = bestStage;
+      store.set(STORE_KEYS.currentStage, bestStage);
+      renderStages();
+      drawRoute();
+      refreshWeather();
+    }
+  }
+  const stage = STAGES[state.currentStage - 1];
+  const proj = onRoute && bestStage === state.currentStage
+    ? bestProj
+    : projectOnRoute(state.pos, stage.waypoints);
+
+  const totalKm = stage.km;
+  const doneKm  = (proj.distAlong / 1000);
+  const remainKm = Math.max(0, totalKm - doneKm);
+  const pct = Math.max(0, Math.min(100, (doneKm / totalKm) * 100));
+
+  document.getElementById('stagePillTxt').textContent = `Stage ${stage.id} · ${stage.from} → ${stage.to}`;
+  document.getElementById('stageBarFill').style.width = pct.toFixed(1) + '%';
+  document.getElementById('stageDone').textContent   = `${doneKm.toFixed(1)} km walked`;
+  document.getElementById('stagePct').textContent    = `${pct.toFixed(0)}%`;
+  document.getElementById('stageRemain').textContent = `${remainKm.toFixed(1)} km to go`;
+
+  setStatus(
+    onRoute ? `On route · ${stage.to}` : 'Off route',
+    onRoute
+      ? `${pct.toFixed(0)}% through · ${remainKm.toFixed(1)} km to ${stage.to}`
+      : `${(bestDist/1000).toFixed(2)} km from the closest Camino path.`
+  );
+  document.getElementById('mapStatus').classList.toggle('live', onRoute);
+}
+
+/* =========================================================
+   STAGES VIEW
+   ========================================================= */
+function renderItinerary(){
+  const list = document.getElementById('stagesList');
+  list.innerHTML = '';
+  if (!STAGES.length){
+    list.innerHTML = '<div class="empty-state"><div class="ico">🐚</div>Loading route…</div>';
+    return;
+  }
+
+  // Build the full ordered list: original items + custom items inserted at their `after` position.
+  const base = ITINERARY.length ? ITINERARY : STAGES.map(s => ({ id: 'stage-'+s.id, type: 'stage', stageId: s.id }));
+  const finalList = buildFullItinerary(base, state.itineraryCustom);
+
+  finalList.forEach(item => {
+    const edit = state.itineraryEdits[item.id] || null;
+    const isUserAdded = !!item.userAdded;
+    let card;
+    if (item.type === 'stage'){
+      card = renderStageCard(STAGES.find(s => s.id === item.stageId), edit);
+    } else if (item.type === 'flight'){
+      card = renderLegCard('flight', item, edit, isUserAdded);
+    } else if (item.type === 'transit'){
+      card = renderLegCard('transit', item, edit, isUserAdded);
+    } else if (item.type === 'layover'){
+      card = renderLegCard('layover', item, edit, isUserAdded);
+    } else if (item.type === 'city'){
+      card = renderCityCard(item, edit, isUserAdded);
+    } else if (item.type === 'custom'){
+      card = renderCustomCard(item, edit);
+    }
+    if (card) list.appendChild(card);
+  });
+
+  // "+ Add stop" button
+  const addBtn = document.createElement('button');
+  addBtn.className = 'add-stop-btn';
+  addBtn.innerHTML = '+ Add a stop, rest day, or note';
+  addBtn.onclick = () => openAddItemModal(finalList);
+  list.appendChild(addBtn);
+
+  // Saved hotels section
+  const hotelsList = document.getElementById('hotelsList');
+  hotelsList.innerHTML = '';
+  state.hotels.forEach(h => {
+    if (!h.name && !h.address && !h.phone) return;
+    const stage = STAGES.find(s => s.id === h.stageId);
+    if (!stage) return;
+    const c = document.createElement('div'); c.className = 'card';
+    c.innerHTML = `
+      <h3>${escapeHtml(h.name || 'Untitled')}</h3>
+      <div class="muted">${escapeHtml(stage.to)} · Stage ${h.stageId}</div>
+      ${h.address ? `<div style="margin-top:8px;font-size:13.5px">📍 ${escapeHtml(h.address)}</div>` : ''}
+      ${h.phone ? `<div style="margin-top:4px;font-size:13.5px">📞 <a href="tel:${escapeAttr(h.phone)}" style="color:var(--ink)">${escapeHtml(h.phone)}</a></div>` : ''}
+      ${h.checkin ? `<div style="margin-top:4px;font-size:13.5px">🕒 Check-in ${escapeHtml(h.checkin)}</div>` : ''}
+      ${h.notes ? `<div style="margin-top:8px;font-size:13px;color:var(--ink-2)">${escapeHtml(h.notes)}</div>` : ''}
+    `;
+    hotelsList.appendChild(c);
+  });
+  if (!hotelsList.children.length){
+    hotelsList.innerHTML = '<div class="empty-state"><div class="ico">🛏</div>No hotels saved yet · tap a stage above to add one.</div>';
+  }
+}
+
+// Merge custom items into the base list. Each custom item has `after: <itemId>`
+// (or `after: null` to put at the very start).
+function buildFullItinerary(base, custom){
+  const out = [];
+  // Group customs by their `after` id
+  const byAfter = {};
+  custom.forEach(c => {
+    const key = c.after || '__start__';
+    (byAfter[key] = byAfter[key] || []).push(c);
+  });
+  if (byAfter['__start__']) out.push(...byAfter['__start__']);
+  base.forEach(item => {
+    out.push(item);
+    if (byAfter[item.id]) out.push(...byAfter[item.id]);
+  });
+  return out;
+}
+
+// Backward-compat alias (called from updateProgress, reset, hotel-save)
+function renderStages(){ renderItinerary(); }
+
+function renderStageCard(s, edit){
+  const isCurrent = s.id === state.currentStage;
+  const isDone = s.id < state.currentStage;
+  const hotel = state.hotels.find(h => h.stageId === s.id) || { name:'', address:'', phone:'' };
+  const counts = { lodging:0, food:0, water:0, church:0 };
+  FEATURES.forEach(f => {
+    if (f.stage === s.id && counts[f.category] !== undefined) counts[f.category]++;
+  });
+  const isEdited = !!hotel.name || !!(edit && (edit.date || edit.notes));
+  const card = document.createElement('div');
+  card.className = 'stage-card' + (isCurrent ? ' current' : isDone ? ' done' : '') + (isEdited ? ' edited' : '');
+  card.innerHTML = `
+    <div class="num">${s.id}</div>
+    <div class="body">
+      <div class="title">${escapeHtml(s.from)} → ${escapeHtml(s.to)}${isEdited ? '<span class="edit-badge">✎ edited</span>' : ''}</div>
+      <div class="sub">${s.km} km · ${escapeHtml(s.description)}</div>
+      <div class="stage-counts">
+        <span title="Albergues/hotels">🛏 ${counts.lodging}</span>
+        <span title="Food">🍴 ${counts.food}</span>
+        <span title="Water">💧 ${counts.water}</span>
+        <span title="Churches">⛪ ${counts.church}</span>
+      </div>
+      ${edit && edit.date ? `<div class="leg-meta">📅 ${escapeHtml(edit.date)}${edit.time ? ' · ' + escapeHtml(edit.time) : ''}</div>` : ''}
+      <div class="hotel ${hotel.name ? '' : 'empty'}">
+        🛏 ${hotel.name ? `<b>${escapeHtml(hotel.name)}</b>` : 'No hotel saved · tap to add'}
+      </div>
+      ${edit && edit.notes ? `<div class="leg-user-notes"><b>My notes</b>${escapeHtml(edit.notes)}</div>` : ''}
+    </div>
+    <div class="km">${s.km}<small>km</small></div>
+  `;
+  card.onclick = () => openHotelModal(s.id);
+  return card;
+}
+
+function renderLegCard(kind, item, edit, isUserAdded){
+  const card = document.createElement('div');
+  let cls = 'leg-card ' + kind;
+  if (edit) cls += ' edited';
+  if (isUserAdded) cls += ' added';
+  card.className = cls;
+  const title = kind === 'layover'
+    ? `Layover in ${item.at}`
+    : `${item.from} → ${item.to}`;
+  const meta = [item.duration, (item.carriers || []).join(' / ')].filter(Boolean).join(' · ');
+  const optionsHtml = (item.options || []).map(o =>
+    `<a href="${escapeAttr(o.url)}" target="_blank" rel="noopener">${escapeHtml(o.label)} ↗</a>`
+  ).join('');
+  const editLabel = isUserAdded
+    ? '<span class="edit-badge added">+ added</span>'
+    : (edit ? '<span class="edit-badge">✎ edited</span>' : '');
+  const dateLine = edit && (edit.date || edit.time)
+    ? `<div class="leg-meta">📅 ${escapeHtml([edit.date, edit.time].filter(Boolean).join(' · '))}${edit.confirmation ? ' · ' + escapeHtml(edit.confirmation) : ''}</div>`
+    : '';
+  card.innerHTML = `
+    <div class="leg-icon">${item.icon || '•'}</div>
+    <div class="leg-body">
+      <div class="leg-route">${escapeHtml(title)}${editLabel}</div>
+      ${meta ? `<div class="leg-meta">${escapeHtml(meta)}</div>` : ''}
+      ${dateLine}
+      ${item.note ? `<div class="leg-note">${escapeHtml(item.note)}</div>` : ''}
+      ${edit && edit.notes ? `<div class="leg-user-notes"><b>My notes</b>${escapeHtml(edit.notes)}</div>` : ''}
+      ${optionsHtml ? `<div class="leg-options">${optionsHtml}</div>` : ''}
+      <div class="leg-actions-row">
+        <button class="btn-edit" data-edit="${item.id}">✎ Edit</button>
+        ${isUserAdded ? `<button class="btn-edit delete" data-del="${item.id}">Delete</button>` : ''}
+      </div>
+    </div>
+  `;
+  card.querySelector('[data-edit]').onclick = (e) => { e.stopPropagation(); openEditModal(item); };
+  const delBtn = card.querySelector('[data-del]');
+  if (delBtn) delBtn.onclick = (e) => { e.stopPropagation(); deleteCustomItem(item.id); };
+  return card;
+}
+
+function renderCityCard(item, edit, isUserAdded){
+  const card = document.createElement('div');
+  let cls = 'leg-card city';
+  if (edit) cls += ' edited';
+  if (isUserAdded) cls += ' added';
+  card.className = cls;
+  const hl = (item.highlights || []).map(h => `<li>${escapeHtml(h)}</li>`).join('');
+  const editLabel = isUserAdded
+    ? '<span class="edit-badge added">+ added</span>'
+    : (edit ? '<span class="edit-badge">✎ edited</span>' : '');
+  const dateLine = edit && (edit.date || edit.time)
+    ? `<div class="leg-meta">📅 ${escapeHtml([edit.date, edit.time].filter(Boolean).join(' · '))}</div>`
+    : '';
+  const hotelLine = edit && (edit.hotel || edit.confirmation)
+    ? `<div class="leg-meta">🛏 ${escapeHtml(edit.hotel || '—')}${edit.confirmation ? ' · ' + escapeHtml(edit.confirmation) : ''}</div>`
+    : '';
+  card.innerHTML = `
+    <div class="leg-icon">${item.icon || '🏛'}</div>
+    <div class="leg-body">
+      <div class="leg-route">Explore ${escapeHtml(item.name)}${editLabel}</div>
+      ${dateLine}${hotelLine}
+      ${item.note ? `<div class="leg-note">${escapeHtml(item.note)}</div>` : ''}
+      ${edit && edit.notes ? `<div class="leg-user-notes"><b>My notes</b>${escapeHtml(edit.notes)}</div>` : ''}
+      ${hl ? `<ul class="leg-highlights">${hl}</ul>` : ''}
+      <div class="leg-actions-row">
+        <button class="btn-edit" data-edit="${item.id}">✎ Edit</button>
+        ${isUserAdded ? `<button class="btn-edit delete" data-del="${item.id}">Delete</button>` : ''}
+      </div>
+    </div>
+  `;
+  card.querySelector('[data-edit]').onclick = (e) => { e.stopPropagation(); openEditModal(item); };
+  const delBtn = card.querySelector('[data-del]');
+  if (delBtn) delBtn.onclick = (e) => { e.stopPropagation(); deleteCustomItem(item.id); };
+  return card;
+}
+
+function renderCustomCard(item){
+  const edit = state.itineraryEdits[item.id] || null;
+  const card = document.createElement('div');
+  card.className = 'leg-card custom added';
+  const title = item.title || 'Custom stop';
+  const dateLine = edit && (edit.date || edit.time)
+    ? `<div class="leg-meta">📅 ${escapeHtml([edit.date, edit.time].filter(Boolean).join(' · '))}</div>`
+    : (item.date || item.time)
+      ? `<div class="leg-meta">📅 ${escapeHtml([item.date, item.time].filter(Boolean).join(' · '))}</div>`
+      : '';
+  const notes = (edit && edit.notes) || item.notes || '';
+  card.innerHTML = `
+    <div class="leg-icon">${item.icon || '📌'}</div>
+    <div class="leg-body">
+      <div class="leg-route">${escapeHtml(title)}<span class="edit-badge added">+ added</span></div>
+      ${dateLine}
+      ${notes ? `<div class="leg-user-notes"><b>My notes</b>${escapeHtml(notes)}</div>` : ''}
+      <div class="leg-actions-row">
+        <button class="btn-edit" data-edit="${item.id}">✎ Edit</button>
+        <button class="btn-edit delete" data-del="${item.id}">Delete</button>
+      </div>
+    </div>
+  `;
+  card.querySelector('[data-edit]').onclick = (e) => { e.stopPropagation(); openEditModal(item); };
+  card.querySelector('[data-del]').onclick = (e) => { e.stopPropagation(); deleteCustomItem(item.id); };
+  return card;
+}
+
+/* =========================================================
+   ITINERARY EDIT + ADD
+   ========================================================= */
+function openEditModal(item){
+  const edit = state.itineraryEdits[item.id] || {};
+  const isCustom = item.type === 'custom';
+  const isFlightOrTransit = item.type === 'flight' || item.type === 'transit';
+  const isCity = item.type === 'city';
+  const isLayover = item.type === 'layover';
+
+  let title;
+  if (isCustom) title = item.title || 'Custom stop';
+  else if (isCity) title = 'Explore ' + item.name;
+  else if (isLayover) title = 'Layover in ' + item.at;
+  else title = item.from + ' → ' + item.to;
+
+  showModal(`
+    <h2>Edit · ${escapeHtml(title)}</h2>
+    <div class="meta">Your edits stay on this phone. Original info above is preserved.</div>
+
+    ${isCustom ? `
+      <div class="field">
+        <label>Title</label>
+        <input id="e_title" value="${escapeAttr(item.title || '')}" placeholder="e.g. Day trip to Fisterra"/>
+      </div>
+    ` : ''}
+
+    <div class="field" style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div><label>Date</label><input id="e_date" value="${escapeAttr(edit.date || '')}" placeholder="e.g. Sep 15"/></div>
+      <div><label>Time</label><input id="e_time" value="${escapeAttr(edit.time || '')}" placeholder="e.g. 21:30"/></div>
+    </div>
+
+    ${isFlightOrTransit ? `
+      <div class="field"><label>Flight / train / bus number</label>
+        <input id="e_conf" value="${escapeAttr(edit.confirmation || '')}" placeholder="e.g. EK 333, Alvia 04094"/></div>
+    ` : ''}
+
+    ${isCity ? `
+      <div class="field"><label>Hotel</label>
+        <input id="e_hotel" value="${escapeAttr(edit.hotel || '')}" placeholder="Hotel name"/></div>
+      <div class="field"><label>Confirmation / booking ref</label>
+        <input id="e_conf" value="${escapeAttr(edit.confirmation || '')}" placeholder="e.g. Booking.com 1234"/></div>
+    ` : ''}
+
+    ${isLayover ? `
+      <div class="field"><label>Terminal / gate</label>
+        <input id="e_conf" value="${escapeAttr(edit.confirmation || '')}" placeholder="e.g. T3, Gate B12"/></div>
+    ` : ''}
+
+    <div class="field"><label>My notes</label>
+      <textarea id="e_notes" placeholder="Anything you want to remember">${escapeHtml(edit.notes || '')}</textarea></div>
+
+    <div class="actions">
+      <button class="btn-secondary" id="m_cancel">Cancel</button>
+      ${(state.itineraryEdits[item.id] || isCustom) ? `<button class="btn-secondary" id="m_clear" style="color:var(--terra)">${isCustom ? 'Delete' : 'Clear edits'}</button>` : ''}
+      <button class="btn-primary" id="m_save">Save</button>
+    </div>
+  `);
+  document.getElementById('m_cancel').onclick = closeModal;
+  const clearBtn = document.getElementById('m_clear');
+  if (clearBtn) clearBtn.onclick = () => {
+    if (isCustom){
+      if (!confirm('Delete this custom stop?')) return;
+      deleteCustomItem(item.id);
+      closeModal();
+    } else {
+      if (!confirm('Clear your edits to this item?')) return;
+      delete state.itineraryEdits[item.id];
+      store.set(STORE_KEYS.itineraryEdits, state.itineraryEdits);
+      closeModal(); renderItinerary(); toast('Edits cleared');
+    }
+  };
+  document.getElementById('m_save').onclick = () => {
+    const payload = {
+      date: document.getElementById('e_date').value.trim(),
+      time: document.getElementById('e_time').value.trim(),
+      confirmation: (document.getElementById('e_conf') || {}).value?.trim() || '',
+      hotel: (document.getElementById('e_hotel') || {}).value?.trim() || '',
+      notes: document.getElementById('e_notes').value.trim(),
+    };
+    if (isCustom){
+      // Save title back to the custom item itself
+      const newTitle = document.getElementById('e_title').value.trim();
+      const custom = state.itineraryCustom.find(c => c.id === item.id);
+      if (custom){
+        custom.title = newTitle || 'Custom stop';
+        store.set(STORE_KEYS.itineraryCustom, state.itineraryCustom);
+      }
+    }
+    // Only store non-empty edits
+    const hasAny = Object.values(payload).some(v => v);
+    if (hasAny) state.itineraryEdits[item.id] = payload;
+    else delete state.itineraryEdits[item.id];
+    store.set(STORE_KEYS.itineraryEdits, state.itineraryEdits);
+    closeModal(); renderItinerary(); toast('Saved');
+  };
+}
+
+function openAddItemModal(currentList){
+  // Step 1: type picker
+  showModal(`
+    <h2>Add a stop</h2>
+    <div class="meta">Pick what to add. You can insert it anywhere in your trip.</div>
+    <div class="type-grid">
+      <button data-t="city"><div class="ti">🏛</div>City visit</button>
+      <button data-t="flight"><div class="ti">✈️</div>Flight</button>
+      <button data-t="transit"><div class="ti">🚄</div>Train / bus</button>
+      <button data-t="layover"><div class="ti">🛬</div>Layover</button>
+      <button data-t="custom"><div class="ti">📌</div>Rest day / note</button>
+      <button data-t="custom-walk"><div class="ti">🥾</div>Side trip / hike</button>
+    </div>
+    <div class="actions">
+      <button class="btn-secondary" id="m_cancel">Cancel</button>
+    </div>
+  `);
+  document.getElementById('m_cancel').onclick = closeModal;
+  document.querySelectorAll('.type-grid button').forEach(btn => {
+    btn.onclick = () => {
+      const t = btn.dataset.t;
+      openAddItemStep2(t, currentList);
+    };
+  });
+}
+
+function openAddItemStep2(kind, currentList){
+  // Step 2: details + where to insert
+  const optionsHtml = currentList
+    .map(i => {
+      const lbl = i.type === 'stage' ? `Stage ${i.stageId}`
+                : i.type === 'city' ? `Explore ${i.name}`
+                : i.type === 'layover' ? `Layover ${i.at}`
+                : i.type === 'custom' ? (i.title || 'Custom')
+                : `${i.from} → ${i.to}`;
+      return `<option value="${escapeAttr(i.id)}">After: ${escapeHtml(lbl)}</option>`;
+    }).join('');
+
+  const baseTitle = ({
+    'city': 'New city stop',
+    'flight': 'New flight',
+    'transit': 'New train / bus',
+    'layover': 'New layover',
+    'custom': 'Rest day / note',
+    'custom-walk': 'Side trip'
+  })[kind] || 'New stop';
+
+  const isPair = kind === 'flight' || kind === 'transit';
+  const isCity = kind === 'city';
+  const isLayover = kind === 'layover';
+  const isCustom = kind === 'custom' || kind === 'custom-walk';
+
+  showModal(`
+    <h2>${escapeHtml(baseTitle)}</h2>
+    <div class="meta">This will appear with a dashed orange border to show it was added by you.</div>
+
+    ${isPair ? `
+      <div class="field" style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div><label>From</label><input id="a_from" placeholder="e.g. Vigo"/></div>
+        <div><label>To</label><input id="a_to" placeholder="e.g. Finisterre"/></div>
+      </div>
+    ` : ''}
+
+    ${isCity ? `<div class="field"><label>City</label><input id="a_name" placeholder="e.g. Fisterra"/></div>` : ''}
+    ${isLayover ? `<div class="field"><label>Where</label><input id="a_at" placeholder="e.g. Doha (DOH)"/></div>` : ''}
+    ${isCustom ? `<div class="field"><label>Title</label><input id="a_title" placeholder="e.g. Day trip to Fisterra"/></div>` : ''}
+
+    <div class="field" style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div><label>Date</label><input id="a_date" placeholder="e.g. Sep 25"/></div>
+      <div><label>Time</label><input id="a_time" placeholder="e.g. 09:00"/></div>
+    </div>
+
+    <div class="field"><label>Notes</label>
+      <textarea id="a_notes" placeholder="Anything to remember"></textarea></div>
+
+    <div class="field"><label>Insert this stop…</label>
+      <select id="a_after">
+        <option value="__start__">At the very start</option>
+        ${optionsHtml}
+      </select></div>
+
+    <div class="actions">
+      <button class="btn-secondary" id="m_back">Back</button>
+      <button class="btn-primary" id="m_add">Add to trip</button>
+    </div>
+  `);
+  document.getElementById('m_back').onclick = () => openAddItemModal(currentList);
+  document.getElementById('m_add').onclick = () => {
+    const id = 'user-' + Date.now();
+    const after = document.getElementById('a_after').value;
+    const newItem = {
+      id, after: after === '__start__' ? null : after,
+      type: isCustom ? 'custom' : kind,
+      userAdded: true,
+      date: document.getElementById('a_date').value.trim(),
+      time: document.getElementById('a_time').value.trim(),
+      notes: document.getElementById('a_notes').value.trim(),
+    };
+    if (isPair){
+      newItem.from = document.getElementById('a_from').value.trim() || '—';
+      newItem.to = document.getElementById('a_to').value.trim() || '—';
+      newItem.icon = kind === 'flight' ? '✈️' : '🚄';
+    }
+    if (isCity){
+      newItem.name = document.getElementById('a_name').value.trim() || 'New city';
+      newItem.icon = '🏛';
+      newItem.highlights = [];
+    }
+    if (isLayover){
+      newItem.at = document.getElementById('a_at').value.trim() || '—';
+      newItem.icon = '🛬';
+    }
+    if (isCustom){
+      newItem.title = document.getElementById('a_title').value.trim() || (kind === 'custom-walk' ? 'Side trip' : 'Rest day');
+      newItem.icon = kind === 'custom-walk' ? '🥾' : '📌';
+    }
+    state.itineraryCustom.push(newItem);
+    store.set(STORE_KEYS.itineraryCustom, state.itineraryCustom);
+    closeModal(); renderItinerary(); toast('Added to trip');
+  };
+}
+
+function deleteCustomItem(id){
+  if (!confirm('Remove this from your trip?')) return;
+  state.itineraryCustom = state.itineraryCustom.filter(c => c.id !== id);
+  delete state.itineraryEdits[id];
+  store.set(STORE_KEYS.itineraryCustom, state.itineraryCustom);
+  store.set(STORE_KEYS.itineraryEdits, state.itineraryEdits);
+  renderItinerary(); toast('Removed');
+}
+
+function openHotelModal(stageId){
+  const stage = STAGES.find(s => s.id === stageId);
+  const hotel = state.hotels.find(h => h.stageId === stageId);
+  showModal(`
+    <h2>Stage ${stage.id} · ${escapeHtml(stage.to)}</h2>
+    <div class="meta">Hotel / lodging details</div>
+    <div class="field"><label>Hotel name</label><input id="h_name" value="${escapeAttr(hotel.name)}" placeholder="e.g. Hotel Madrid"/></div>
+    <div class="field"><label>Address</label><input id="h_address" value="${escapeAttr(hotel.address)}" placeholder="Rúa…"/></div>
+    <div class="field"><label>Phone</label><input id="h_phone" type="tel" value="${escapeAttr(hotel.phone)}" placeholder="+34 …"/></div>
+    <div class="field"><label>Check-in time</label><input id="h_checkin" value="${escapeAttr(hotel.checkin)}" placeholder="14:00"/></div>
+    <div class="field"><label>Notes</label><textarea id="h_notes" placeholder="Bookings ref, breakfast, etc.">${escapeHtml(hotel.notes)}</textarea></div>
+    <div class="actions">
+      <button class="btn-secondary" id="m_cancel">Cancel</button>
+      <button class="btn-primary" id="m_save">Save</button>
+    </div>
+  `);
+  document.getElementById('m_cancel').onclick = closeModal;
+  document.getElementById('m_save').onclick = () => {
+    hotel.name    = document.getElementById('h_name').value.trim();
+    hotel.address = document.getElementById('h_address').value.trim();
+    hotel.phone   = document.getElementById('h_phone').value.trim();
+    hotel.checkin = document.getElementById('h_checkin').value.trim();
+    hotel.notes   = document.getElementById('h_notes').value.trim();
+    store.set(STORE_KEYS.hotels, state.hotels);
+    closeModal(); renderStages(); toast('Saved');
+  };
+}
+
+/* =========================================================
+   NEARBY VIEW
+   ========================================================= */
+function renderNearby(){
+  const grid = document.getElementById('nearGrid');
+  grid.innerHTML = '';
+  NEAR_CATEGORIES.forEach(c => {
+    const b = document.createElement('button');
+    b.className = 'near-btn'; b.dataset.cat = c.id;
+    b.innerHTML = `<div class="icn">${c.icon}</div><div class="lbl">${c.label}</div><div class="sub">${c.sub}</div>`;
+    b.onclick = () => searchNearby(c);
+    grid.appendChild(b);
+  });
+
+  const panic = document.getElementById('panicGrid');
+  panic.innerHTML = '';
+  PANIC_BUTTONS.forEach(p => {
+    const cat = NEAR_CATEGORIES.find(c => c.id === p.id);
+    const b = document.createElement('button');
+    b.className = 'panic-btn'; b.dataset.urgent = p.urgent;
+    b.innerHTML = `<div class="icn">${p.icon}</div><div><div class="lbl">${p.label}</div><div class="sub">${p.sub}</div></div>`;
+    b.onclick = () => searchNearby(cat, true);
+    panic.appendChild(b);
+  });
+  const share = document.createElement('button');
+  share.className = 'panic-share';
+  share.innerHTML = '📍 Share my location with family';
+  share.onclick = shareLocation;
+  panic.appendChild(share);
+}
+
+async function searchNearby(category, autoOpenFirst=false){
+  if (!state.pos){
+    toast('Waiting for GPS…');
+    startGeolocation(true);
+    return;
+  }
+  openSheet(category.label, '<div class="row-flex"><span class="spin"></span> <span>Searching nearby…</span></div>');
+
+  const [lat, lng] = state.pos;
+  const radius = 1500;
+
+  // 1) Curated results from Wise Pilgrim features
+  const curatedCat = ({
+    toilets: 'restroom', lodging: 'lodging', food: 'food',
+    transit: 'transit', pharmacy: null, water: 'water', church: 'church'
+  })[category.id];
+  let curated = [];
+  if (curatedCat){
+    curated = FEATURES
+      .filter(f => f.category === curatedCat)
+      .map(f => ({ ...f, distance: haversine(state.pos, [f.lat, f.lng]) }))
+      .filter(f => f.distance < 5000)  // wider radius for curated since they're vetted
+      .sort((a,b) => a.distance - b.distance)
+      .slice(0, 10);
+  }
+
+  // 2) Live OSM results from Overpass
+  const queryParts = category.query.split(';').map(q => q.trim()).filter(Boolean)
+    .map(q => `${q}(around:${radius},${lat},${lng});`).join('\n');
+  const overpass = `[out:json][timeout:20];(${queryParts});out center 60;`;
+
+  let osmResults = [];
+  let osmError = null;
+  try {
+    const results = await runOverpass(overpass);
+    osmResults = results.map(r => ({
+      ...r,
+      distance: haversine(state.pos, [r.lat, r.lon])
+    })).sort((a,b) => a.distance - b.distance).slice(0, 30);
+  } catch(e) {
+    osmError = e.message || 'Live search failed';
+  }
+
+  if (!curated.length && !osmResults.length){
+    document.getElementById('poiResults').innerHTML = osmError
+      ? `<div class="empty-state"><div class="ico">⚠️</div>${escapeHtml(osmError)}<br/><br/><button class="btn-ghost" onclick="searchNearby(NEAR_CATEGORIES.find(c=>c.id==='${category.id}'))">Retry</button></div>`
+      : '<div class="empty-state"><div class="ico">🔍</div>Nothing found within 1.5 km.<br/>Try walking on a bit and search again.</div>';
+    document.getElementById('poiSub').textContent = '0 results';
+    return;
+  }
+
+  document.getElementById('poiSub').textContent =
+    `${curated.length} on-Camino · ${osmResults.length} live nearby${osmError ? ' (live search failed)' : ''}`;
+  renderPoiResults(curated, osmResults);
+  drawNearbyOnMap(osmResults, curated, category);
+}
+
+async function runOverpass(query){
+  const endpoints = [
+    'https://overpass-api.de/api/interpreter',
+    'https://overpass.kumi.systems/api/interpreter',
+    'https://overpass.openstreetmap.fr/api/interpreter'
+  ];
+  let lastErr;
+  for (const ep of endpoints){
+    try {
+      const res = await fetch(ep, {
+        method:'POST',
+        headers:{ 'Content-Type':'application/x-www-form-urlencoded' },
+        body: 'data=' + encodeURIComponent(query)
+      });
+      if (!res.ok) throw new Error(`${ep}: HTTP ${res.status}`);
+      const json = await res.json();
+      return (json.elements || []).map(el => ({
+        id: el.id, type: el.type,
+        lat: el.lat || el.center?.lat,
+        lon: el.lon || el.center?.lon,
+        tags: el.tags || {}
+      })).filter(e => e.lat && e.lon);
+    } catch(e){ lastErr = e; }
+  }
+  throw lastErr || new Error('All Overpass endpoints failed');
+}
+
+function renderPoiResults(curated, osm){
+  const wrap = document.getElementById('poiResults');
+  wrap.innerHTML = '';
+
+  if (curated.length){
+    const h = document.createElement('div');
+    h.className = 'poi-section';
+    h.innerHTML = '<div class="poi-section-head">🐚 On the Camino · curated</div>';
+    wrap.appendChild(h);
+    curated.forEach(f => {
+      const desc = (f.description || '').replace(/https?:\/\/[^\s<>"]+/g, '').trim().replace(/\s*·\s*$/, '');
+      const url = (f.description || '').match(/https?:\/\/[^\s<>"]+/);
+      const row = document.createElement('button');
+      row.className = 'poi-row';
+      row.innerHTML = `
+        <div class="dist">${fmtKm(f.distance)}</div>
+        <div class="info">
+          <div class="nm">${escapeHtml(f.name)} <span class="poi-badge">Stage ${f.stage}</span></div>
+          <div class="meta">${escapeHtml(desc || (FEATURE_STYLES[f.category]||{}).label || '')}</div>
+        </div>
+        <span class="go">${url ? '🔗' : 'Go ›'}</span>
+      `;
+      row.onclick = () => {
+        if (url) window.open(url[0], '_blank');
+        else window.open(`https://www.google.com/maps/dir/?api=1&destination=${f.lat},${f.lng}&travelmode=walking`, '_blank');
+      };
+      wrap.appendChild(row);
+    });
+  }
+
+  if (osm.length){
+    const h = document.createElement('div');
+    h.className = 'poi-section';
+    h.innerHTML = '<div class="poi-section-head">📡 Live nearby · OpenStreetMap</div>';
+    wrap.appendChild(h);
+    osm.forEach(p => {
+      const name = p.tags.name || p.tags['name:gl'] || p.tags['name:es'] || p.tags.brand || prettyTags(p.tags);
+      const meta = describePoi(p.tags);
+      const row = document.createElement('button');
+      row.className = 'poi-row';
+      row.innerHTML = `
+        <div class="dist">${fmtKm(p.distance)}</div>
+        <div class="info"><div class="nm">${escapeHtml(name)}</div><div class="meta">${escapeHtml(meta)}</div></div>
+        <span class="go">Go ›</span>
+      `;
+      row.onclick = () => {
+        const url = `https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lon}&travelmode=walking`;
+        window.open(url, '_blank');
+      };
+      wrap.appendChild(row);
+    });
+  }
+}
+
+function describePoi(t){
+  const parts = [];
+  if (t.amenity) parts.push(t.amenity.replace(/_/g,' '));
+  if (t.tourism) parts.push(t.tourism.replace(/_/g,' '));
+  if (t.cuisine) parts.push(t.cuisine.split(';')[0]);
+  if (t.opening_hours) parts.push('hrs: ' + t.opening_hours.split(';')[0]);
+  if (t.phone) parts.push(t.phone);
+  if (t.wheelchair === 'yes') parts.push('♿');
+  if (t['addr:street']) parts.push(t['addr:street']);
+  return parts.join(' · ') || 'Unnamed';
+}
+function prettyTags(t){
+  return (t.amenity || t.tourism || t.shop || t.historic || 'Place')
+    .replace(/_/g,' ').replace(/^./, c => c.toUpperCase());
+}
+
+function drawNearbyOnMap(osmItems, curatedItems, category){
+  nearbyLayer.clearLayers();
+  (curatedItems || []).slice(0, 10).forEach(p => {
+    const s = FEATURE_STYLES[p.category] || FEATURE_STYLES.other;
+    L.circleMarker([p.lat, p.lng], {
+      radius: 8, color: s.color, weight: 3, fillColor: '#FFC72C', fillOpacity: 0.9
+    }).addTo(nearbyLayer).bindTooltip(`🐚 ${p.name}`, { direction:'top' });
+  });
+  (osmItems || []).slice(0, 20).forEach(p => {
+    L.circleMarker([p.lat, p.lon], {
+      radius: 6, color: '#C84B31', weight: 2, fillColor: '#fff', fillOpacity: 0.9
+    }).addTo(nearbyLayer).bindTooltip(p.tags.name || category.label, { direction:'top' });
+  });
+}
+
+/* =========================================================
+   TIME VIEW
+   ========================================================= */
+function renderTime(){
+  const grid = document.getElementById('timeGrid');
+  const now = new Date();
+  const fmt = (tz) => ({
+    time: now.toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit', timeZone: tz }),
+    date: now.toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'short', timeZone: tz })
+  });
+  const sp = fmt('Europe/Madrid'), ph = fmt('Asia/Manila');
+
+  grid.innerHTML = `
+    <div class="clock-card spain">
+      <div class="flag">🇪🇸</div>
+      <div class="place">Spain · Madrid</div>
+      <div class="time">${sp.time}</div>
+      <div class="date">${sp.date}</div>
+    </div>
+    <div class="clock-card ph">
+      <div class="flag">🇵🇭</div>
+      <div class="place">Philippines · Manila</div>
+      <div class="time">${ph.time}</div>
+      <div class="date">${ph.date}</div>
+    </div>
+  `;
+
+  // Call-home indicator: PH time should be 7am-10pm
+  const phHour = parseInt(now.toLocaleString('en-GB', { hour:'2-digit', hour12:false, timeZone:'Asia/Manila' }), 10);
+  const hint = document.getElementById('tzHint');
+  let icon, title, sub;
+  if (phHour >= 7 && phHour < 22){
+    icon = '📞'; title = 'Good time to call home'; sub = `It's ${ph.time} in Manila — family is awake.`;
+  } else if (phHour >= 22 && phHour < 24 || phHour === 0){
+    icon = '🌙'; title = 'Late in Manila'; sub = `It's ${ph.time} there — they may be heading to bed.`;
+  } else {
+    icon = '😴'; title = 'Manila is sleeping'; sub = `It's ${ph.time} there — wait until after 7am.`;
+  }
+  hint.querySelector('.icn').textContent = icon;
+  hint.querySelector('.txt b').textContent = title;
+  hint.querySelector('.txt span').textContent = sub;
+}
+
+function renderTowns(){
+  const wrap = document.getElementById('townList');
+  wrap.innerHTML = '';
+  TOWNS.forEach(t => {
+    const c = document.createElement('div'); c.className = 'town-card';
+    c.innerHTML = `
+      <div class="hd">
+        <h3>${escapeHtml(t.name)}</h3>
+        <div class="stars">${'★'.repeat(t.rating)}${'☆'.repeat(5-t.rating)}</div>
+      </div>
+      <div class="blurb">${escapeHtml(t.blurb)}</div>
+      <div class="hl">${t.highlights.map(h => `<span class="chip">${escapeHtml(h)}</span>`).join('')}</div>
+    `;
+    c.onclick = () => openTownModal(t);
+    wrap.appendChild(c);
+  });
+}
+
+function openTownModal(t){
+  showModal(`
+    <h2>${escapeHtml(t.name)}</h2>
+    <div class="meta">${'★'.repeat(t.rating)} · Worth stopping</div>
+    <p>${escapeHtml(t.blurb)}</p>
+    <label style="font-size:12px;font-weight:600;color:var(--ink-2);text-transform:uppercase;letter-spacing:0.06em;display:block;margin:14px 0 6px">Highlights</label>
+    <ul style="margin:0 0 12px;padding-left:18px;line-height:1.7">${t.highlights.map(h => `<li>${escapeHtml(h)}</li>`).join('')}</ul>
+    <div class="actions">
+      <button class="btn-secondary" id="m_close">Close</button>
+      <button class="btn-primary" id="m_open">Open in Maps</button>
+    </div>
+  `);
+  document.getElementById('m_close').onclick = closeModal;
+  document.getElementById('m_open').onclick = () => {
+    window.open(`https://www.google.com/maps/search/?api=1&query=${t.latlng[0]},${t.latlng[1]}`, '_blank');
+  };
+}
+
+/* =========================================================
+   MORE / EMERGENCY / SETTINGS
+   ========================================================= */
+function renderEmergency(){
+  const wrap = document.getElementById('emergencyList');
+  wrap.innerHTML = '';
+  state.emergency.forEach((e, i) => {
+    const c = document.createElement('div'); c.className = 'card'; c.style.padding = '12px 14px'; c.style.marginBottom='8px';
+    if (e.type === 'phone' && e.value){
+      c.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+          <div><div style="font-size:12px;color:var(--ink-2);text-transform:uppercase;letter-spacing:0.06em">${escapeHtml(e.label)}</div>
+            <div style="font-family:'Fraunces',serif;font-size:18px;font-weight:600;margin-top:2px">${escapeHtml(e.value)}</div></div>
+          <a href="tel:${escapeAttr(e.value.replace(/\s/g,''))}" class="btn-ghost" style="background:var(--terra);color:#fff;text-decoration:none">Call</a>
+        </div>`;
+    } else {
+      c.innerHTML = `
+        <div style="font-size:12px;color:var(--ink-2);text-transform:uppercase;letter-spacing:0.06em">${escapeHtml(e.label)}</div>
+        <div style="margin-top:4px;font-size:14px">${e.value ? escapeHtml(e.value) : '<i style="color:var(--ink-2)">Tap to add</i>'}</div>`;
+      c.style.cursor = 'pointer';
+      c.onclick = () => editEmergency(i);
+    }
+    wrap.appendChild(c);
+  });
+}
+function editEmergency(i){
+  const e = state.emergency[i];
+  showModal(`
+    <h2>${escapeHtml(e.label)}</h2>
+    <div class="field"><label>Value</label><input id="e_val" value="${escapeAttr(e.value || '')}" /></div>
+    <div class="actions">
+      <button class="btn-secondary" id="m_cancel">Cancel</button>
+      <button class="btn-primary" id="m_save">Save</button>
+    </div>
+  `);
+  document.getElementById('m_cancel').onclick = closeModal;
+  document.getElementById('m_save').onclick = () => {
+    state.emergency[i].value = document.getElementById('e_val').value.trim();
+    store.set(STORE_KEYS.emergency, state.emergency);
+    closeModal(); renderEmergency(); toast('Saved');
+  };
+}
+
+document.getElementById('btnReset').onclick = () => {
+  if (!confirm('Reset all hotels, emergency contacts, and itinerary edits/additions to defaults?')) return;
+  state.hotels = JSON.parse(JSON.stringify(HOTELS_DEFAULT));
+  state.emergency = JSON.parse(JSON.stringify(EMERGENCY_DEFAULT));
+  state.itineraryEdits = {};
+  state.itineraryCustom = [];
+  state.currentStage = 1;
+  store.set(STORE_KEYS.hotels, state.hotels);
+  store.set(STORE_KEYS.emergency, state.emergency);
+  store.set(STORE_KEYS.itineraryEdits, {});
+  store.set(STORE_KEYS.itineraryCustom, []);
+  store.set(STORE_KEYS.currentStage, 1);
+  renderItinerary(); renderEmergency(); drawRoute();
+  toast('Reset done');
+};
+
+/* Wake lock toggle */
+const wakeBtn = document.getElementById('wakeToggle');
+wakeBtn.onclick = async () => {
+  if (state.walkingMode){
+    if (state.wakeLock){ await state.wakeLock.release(); state.wakeLock = null; }
+    state.walkingMode = false;
+    wakeBtn.classList.remove('on');
+    toast('Walking mode off');
+  } else {
+    try {
+      if ('wakeLock' in navigator){
+        state.wakeLock = await navigator.wakeLock.request('screen');
+        state.walkingMode = true;
+        wakeBtn.classList.add('on');
+        toast('Walking mode on · screen stays awake');
+        state.wakeLock.addEventListener('release', () => { state.walkingMode = false; wakeBtn.classList.remove('on'); });
+      } else {
+        toast('Wake lock not supported on this browser');
+      }
+    } catch(e){ toast('Could not lock screen'); }
+  }
+};
+
+/* =========================================================
+   SHARE LOCATION
+   ========================================================= */
+async function shareLocation(){
+  if (!state.pos){
+    toast('Waiting for GPS…');
+    startGeolocation(true);
+    return;
+  }
+  const [lat,lng] = state.pos;
+  const stage = STAGES[state.currentStage - 1];
+  const url = `https://www.google.com/maps?q=${lat},${lng}`;
+  const text = `📍 I'm here on the Camino · Stage ${stage.id} (${stage.from} → ${stage.to})\n${url}`;
+  if (navigator.share){
+    try { await navigator.share({ title:'My location on the Camino', text, url }); }
+    catch(e){ /* cancelled */ }
+  } else {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast('Location copied to clipboard');
+    } catch{
+      toast(url);
+    }
+  }
+}
+
+/* =========================================================
+   SHEET / MODAL / TOAST
+   ========================================================= */
+function openSheet(title, contentHtml){
+  document.getElementById('poiTitle').textContent = title;
+  document.getElementById('poiSub').textContent = '';
+  document.getElementById('poiResults').innerHTML = contentHtml || '';
+  document.getElementById('poiSheet').classList.add('open');
+}
+function closeSheet(){ document.getElementById('poiSheet').classList.remove('open'); nearbyLayer && nearbyLayer.clearLayers(); }
+document.getElementById('poiClose').onclick = closeSheet;
+document.getElementById('poiSheet').addEventListener('click', e => { if (e.target.id === 'poiSheet') closeSheet(); });
+
+function showModal(html){
+  document.getElementById('modalContent').innerHTML = html;
+  document.getElementById('modal').classList.add('open');
+}
+function closeModal(){ document.getElementById('modal').classList.remove('open'); }
+document.getElementById('modal').addEventListener('click', e => { if (e.target.id === 'modal') closeModal(); });
+
+let toastTimer;
+function toast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2400);
+}
+
+/* =========================================================
+   NAV
+   ========================================================= */
+document.querySelectorAll('.bottom-nav button').forEach(btn => {
+  btn.onclick = () => {
+    const id = btn.dataset.view;
+    document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === id));
+    document.querySelectorAll('.bottom-nav button').forEach(b => b.classList.toggle('active', b === btn));
+    if (id === 'viewMap'){ setTimeout(() => map.invalidateSize(), 100); }
+    if (id === 'viewTime'){ renderTime(); renderTowns(); }
+    if (id === 'viewMore'){ renderEmergency(); }
+  };
+});
+
+/* =========================================================
+   UTIL
+   ========================================================= */
+function escapeHtml(s){ return (s||'').toString().replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function escapeAttr(s){ return (s||'').toString().replace(/"/g, '&quot;'); }
+
+/* Re-acquire wake lock after page becomes visible */
+document.addEventListener('visibilitychange', async () => {
+  if (document.visibilityState === 'visible' && state.walkingMode && !state.wakeLock){
+    try { state.wakeLock = await navigator.wakeLock.request('screen'); } catch{}
+  }
+});
+
+/* =========================================================
+   DATA LOADER
+   ========================================================= */
+async function loadCaminoData(){
+  try {
+    const [routeRes, featRes, itinRes] = await Promise.all([
+      fetch('route.json'),
+      fetch('features.json'),
+      fetch('itinerary.json')
+    ]);
+    if (!routeRes.ok) throw new Error('route.json fetch failed: ' + routeRes.status);
+    const route = await routeRes.json();
+    STAGES = route.stages;
+    ALTERNATIVES = route.alternatives || [];
+
+    if (featRes.ok){
+      const feat = await featRes.json();
+      FEATURES = feat.features || [];
+    }
+    if (itinRes.ok){
+      const itin = await itinRes.json();
+      ITINERARY = itin.items || [];
+    }
+
+    // Build hotels list keyed to stages if none saved
+    HOTELS_DEFAULT = STAGES.map(s => ({
+      stageId: s.id, town: s.to, name: '', address: '', phone: '', checkin: '', notes: ''
+    }));
+    if (!state.hotels.length || state.hotels.length !== STAGES.length){
+      state.hotels = HOTELS_DEFAULT.map(h => ({ ...h }));
+    }
+    return true;
+  } catch (e) {
+    console.error('Failed to load Camino data:', e);
+    toast('Could not load route data');
+    return false;
+  }
+}
+
+async function waitForLeaflet(maxMs = 10000){
+  const start = Date.now();
+  while (typeof L === 'undefined' && Date.now() - start < maxMs){
+    await new Promise(r => setTimeout(r, 100));
+  }
+  return typeof L !== 'undefined';
+}
+
+/* =========================================================
+   BOOT
+   ========================================================= */
+document.addEventListener('DOMContentLoaded', async () => {
+  // Kick off data loading immediately — parallel with Leaflet/font loads
+  const dataPromise = loadCaminoData();
+
+  // Render non-map UI as soon as data lands (no map dependency)
+  await dataPromise;
+  renderItinerary();
+  renderNearby();
+  renderTime();
+  renderTowns();
+  renderEmergency();
+  setInterval(renderTime, 30 * 1000);
+  setInterval(refreshWeather, 30 * 60 * 1000); // every 30 min
+
+  // Now try to bring up the map. If Leaflet's CDN is blocked/slow,
+  // the rest of the app still works.
+  const leafletOk = await waitForLeaflet();
+  if (leafletOk){
+    initMap();
+    drawRoute();
+    drawFeatures();
+    renderMapPanel();
+    refreshWeather();
+  } else {
+    document.getElementById('map').innerHTML =
+      '<div class="empty-state" style="padding:60px 20px"><div class="ico">🗺</div>Map library could not load.<br>Check connection and reload.</div>';
+  }
+
+  // Auto-start GPS if permission already granted
+  if (navigator.permissions){
+    navigator.permissions.query({ name:'geolocation' }).then(p => {
+      if (p.state === 'granted') startGeolocation(false);
+    }).catch(() => {});
+  }
+});
+
+// Service worker
+if ('serviceWorker' in navigator){
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  });
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,52 @@
+{
+  "name": "Camino Companion",
+  "short_name": "Camino",
+  "description": "Pilgrim companion for the Portuguese Coastal Camino: live GPS, stage tracking, nearby services, dual time.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F4ECD8",
+  "theme_color": "#1A1F2E",
+  "categories": ["travel", "navigation", "lifestyle"],
+  "icons": [
+    {
+      "src": "icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512-maskable.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Nearby",
+      "short_name": "Nearby",
+      "description": "Quick access to bathrooms, food, lodging",
+      "url": "./?view=nearby"
+    },
+    {
+      "name": "Map",
+      "short_name": "Map",
+      "description": "Live Camino map",
+      "url": "./?view=map"
+    }
+  ]
+}
